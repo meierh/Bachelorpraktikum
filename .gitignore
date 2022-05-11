@@ -331,27 +331,12 @@ ASALocalRun/
 # MFractors (Xamarin productivity tool) working folder
 .mfractor/
 
-*/build
-*/build-windows
-*/build-wsl
-*/build-docker
-*/build-linux
-*/output
-*/bw2
+**/build
+**/build-windows
+**/build-wsl
+**/build-docker
+**/build-linux
+**/output
+**/bw2
+**/.vs
 **/.vscode
-
-**/apply_format.sh
-**/apply_tidy.sh
-**/clang-tidy-output.txt
-**/tidy
-/build-test
-/relearn/build-test
-
-# clangd vscode extension
-.cache/
-/relearn/input/disable.txt
-/output/
-/output-clang-tidy/
-/relearn/googletest/
-/build
-/relearn/build-wsl
