@@ -2,6 +2,7 @@
 #include "MPIWrapper.h"
 
 #include "AllPairsShortestPath.h"
+#include "Clustering.h"
 #include "DegreeCounter.h"
 #include "EdgeCounter.h"
 #include "EdgeLength.h"
@@ -41,6 +42,8 @@ void calculate_metrics(std::filesystem::path input_directory) {
 
 	const auto [average_shortest_path, global_efficiency, number_unreachables] = AllPairsShortestPath::compute_apsp(dg);
 
+	const auto average_cluster_coefficient = Clustering::compuate_average_clustering_coefficient(dg);
+
 	if (my_rank == 0) {
 		std::cout << "The total number of nodes in the graph is: " << number_total_nodes << '\n';
 		std::cout << "The total number of in edges in the graph is: " << number_total_in_edges << '\n';
@@ -50,6 +53,7 @@ void calculate_metrics(std::filesystem::path input_directory) {
 		std::cout << "The average edge length is " << average_edge_length << '\n';
 		std::cout << "The average shortest path is " << average_shortest_path << ", however, " << number_unreachables << " pairs had no path.\n";
 		std::cout << "The global efficiency is " << global_efficiency << ", however, " << number_unreachables << " pairs had no path.\n";
+		std::cout << "The average clustering coefficient is: " << average_cluster_coefficient << '\n';
 		fflush(stdout);
 	}
 }
