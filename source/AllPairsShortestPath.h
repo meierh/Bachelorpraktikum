@@ -63,7 +63,7 @@ class AllPairsShortestPath {
 
 		auto sum_efficiency = 0.0;
 		auto sum_shortest_path_from_node = 0.0;
-		auto number_unreachables_from_node = 0ULL;
+		auto number_unreachables_from_node = std::uint64_t(0);
 
 		for (auto i = 0; i < distances.size(); i++) {
 			const auto distance = distances[i];
@@ -98,7 +98,7 @@ public:
 
 		auto sum_shortest_path_locally = 0.0;
 		auto sum_efficiency_locally = 0.0;
-		auto number_unreachables_locally = 0ULL;
+		auto number_unreachables_locally = std::uint64_t(0);
 
 		graph.lock_all_rma_windows();
 
