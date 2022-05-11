@@ -33,7 +33,7 @@ class Clustering {
 		const auto in_edges = graph.get_in_edges(my_rank, node_id);
 		const auto out_edges = graph.get_out_edges(my_rank, node_id);
 
-		const auto number_all_trianles = static_cast<std::uint64_t>(in_edges.size() * out_edges.size());
+		const auto number_all_triangles = static_cast<std::uint64_t>(in_edges.size() * out_edges.size());
 
 		for (const auto& [target_rank, target_id, weight] : out_edges) {
 			const auto other_out_edges = graph.get_out_edges(target_rank, target_id);
@@ -42,7 +42,7 @@ class Clustering {
 			number_closed_triangles += number_matches;
 		}
 
-		return static_cast<double>(number_closed_triangles) / static_cast<double>(number_all_trianles);
+		return static_cast<double>(number_closed_triangles) / static_cast<double>(number_all_triangles);
 	}
 
 public:
