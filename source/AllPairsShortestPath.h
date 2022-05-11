@@ -11,6 +11,7 @@
 #include <functional>
 #include <numeric>
 #include <queue>
+#include <tuple>
 #include <utility>
 
 #include <iostream>
@@ -30,10 +31,10 @@ struct std::greater<VertexDistanceTriple> {
 };
 
 class AllPairsShortestPath {
-	static std::pair<double, std::uint64_t> compute_sssp(const DistributedGraph& graph, int node_id, std::uint64_t total_number_nodes, const std::vector<std::uint64_t>& prefix_distribution) {
+	static std::tuple<double, double, std::uint64_t> compute_sssp(const DistributedGraph& graph, int node_id, std::uint64_t total_number_nodes, const std::vector<std::uint64_t>& prefix_distribution) {
 		const auto my_rank = MPIWrapper::get_my_rank();
 
-		std::ofstream of{ std::string("log_") + std::to_string(my_rank), std::ios_base::app };
+		std::ofstream log_file{ std::string("log_apsp_") + std::to_string(my_rank) + ".log" };
 
 		std::vector<double> distances(total_number_nodes, std::numeric_limits<double>::infinity());
 		std::priority_queue<VertexDistanceTriple, std::vector<VertexDistanceTriple>, std::greater<VertexDistanceTriple>> shortest_paths_queue{};
@@ -60,26 +61,30 @@ class AllPairsShortestPath {
 			}
 		}
 
-		auto sum = 0.0;
-		std::uint64_t inf_counter = 0;
+		auto sum_efficiency = 0.0;
+		auto sum_shortest_path_from_node = 0.0;
+		auto number_unreachables_from_node = 0ULL;
 
 		for (auto i = 0; i < distances.size(); i++) {
 			const auto distance = distances[i];
 
 			if (distance == std::numeric_limits<double>::infinity()) {
-				inf_counter++;
-				of << node_id << '\t' << i << '\n';
+				number_unreachables_from_node++;
+				log_file << node_id << '\t' << i << '\n';
 			}
 			else {
-				sum += distance;
+				sum_shortest_path_from_node += distance;
+				if (distance != 0) {
+					sum_efficiency += (1.0 / distance);
+				}
 			}
 		}
 
-		return { sum, inf_counter };
+		return { sum_shortest_path_from_node, sum_efficiency, number_unreachables_from_node };
 	}
 
 public:
-	static std::pair<double, std::uint64_t> compute_apsp(const DistributedGraph& graph) {
+	static std::tuple<double, double, std::uint64_t> compute_apsp(const DistributedGraph& graph) {
 		const auto my_rank = MPIWrapper::get_my_rank();
 
 		const auto number_local_nodes = graph.get_number_local_nodes();
@@ -91,15 +96,19 @@ public:
 		auto status_counter = 0;
 		const auto status_step = number_local_nodes / 101.0;
 
-		double sum = 0.0;
-		std::uint64_t inf_counter = 0;
+		auto sum_shortest_path_locally = 0.0;
+		auto sum_efficiency_locally = 0.0;
+		auto number_unreachables_locally = 0ULL;
 
 		graph.lock_all_rma_windows();
 
 		for (auto node_id = 0; node_id < number_local_nodes; node_id++) {
-			const auto [sssp, infs] = compute_sssp(graph, node_id, total_number_nodes, prefix_distribution);
-			sum += sssp;
-			inf_counter += infs;
+			const auto [sum_shortest_path_from_node, sum_efficiency_from_node, number_unreachables_from_node]
+				= compute_sssp(graph, node_id, total_number_nodes, prefix_distribution);
+
+			sum_shortest_path_locally += sum_shortest_path_from_node;
+			sum_efficiency_locally += sum_efficiency_from_node;
+			number_unreachables_locally += number_unreachables_from_node;
 
 			if (node_id % static_cast<int>(status_step) == 0 && status_counter < 100) {
 				status_counter++;
@@ -113,10 +122,16 @@ public:
 
 		Status::report_status(number_local_nodes, total_number_nodes, "APSP");
 
-		const auto total_sum = MPIWrapper::reduce_sum(sum);
+		const auto sum_shortest_paths = MPIWrapper::reduce_sum(sum_shortest_path_locally);
+		const auto sum_efficiency = MPIWrapper::reduce_sum(sum_efficiency_locally);
+		const auto sum_unreachables = MPIWrapper::reduce_sum(number_unreachables_locally);
 
-		const auto total_infs = MPIWrapper::reduce_sum(inf_counter);
+		const auto number_pairs_without_self = (total_number_nodes * total_number_nodes) - total_number_nodes;
+		const auto number_reached_pairs = number_pairs_without_self - number_unreachables_locally;
 
-		return { total_sum / ((total_number_nodes * total_number_nodes) - inf_counter), total_infs };
+		const auto average_shortest_path_length = sum_shortest_paths / number_reached_pairs;
+		const auto average_efficiency = sum_efficiency / number_reached_pairs;
+
+		return { average_shortest_path_length, average_efficiency, sum_unreachables };
 	}
 };

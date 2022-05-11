@@ -57,6 +57,8 @@ public:
 	}
 
 	static void finalize() {
+		barrier();
+
 		for (auto window : windows) {
 			MPI_Win_free(&window);
 		}
