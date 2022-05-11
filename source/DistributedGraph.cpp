@@ -392,7 +392,7 @@ void DistributedGraph::load_in_edges(const std::filesystem::path& path) {
 		number_in_edges[target_id] = in_edges.size();
 
 		if (target_id > 0) {
-			prefix_number_in_edges[target_id] = prefix_number_in_edges[target_id - 1] + in_edges.size();
+			prefix_number_in_edges[target_id] = prefix_number_in_edges[target_id - 1] + all_in_edges[target_id - 1].size();
 		}
 	}
 	MPIWrapper::unlock_window(my_rank, in_edges_window.window);
@@ -481,7 +481,7 @@ void DistributedGraph::load_out_edges(const std::filesystem::path& path) {
 		number_out_edges[source_id] = out_edges.size();
 
 		if (source_id > 0) {
-			prefix_number_out_edges[source_id] = prefix_number_out_edges[source_id - 1] + out_edges.size();
+			prefix_number_out_edges[source_id] = prefix_number_out_edges[source_id - 1] + +all_out_edges[source_id - 1].size();
 		}
 	}
 	MPIWrapper::unlock_window(my_rank, out_edges_window.window);

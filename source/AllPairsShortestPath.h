@@ -49,13 +49,13 @@ class AllPairsShortestPath {
 
 			const auto out_edges = graph.get_out_edges(current_rank, current_id);
 
-			for (const auto& out_edge : out_edges) {
-				const auto new_distance = current_distance + std::abs(out_edge.weight);
+			for (const auto& [target_rank, target_id, weight] : out_edges) {
+				const auto new_distance = current_distance + std::abs(weight);
 
-				const auto other_node_id = prefix_distribution[out_edge.target_rank] + out_edge.target_id;
+				const auto other_node_id = prefix_distribution[target_rank] + target_id;
 				if (distances[other_node_id] > new_distance) {
 					distances[other_node_id] = new_distance;
-					shortest_paths_queue.emplace(out_edge.target_rank, out_edge.target_id, new_distance);
+					shortest_paths_queue.emplace(target_rank, target_id, new_distance);
 				}
 			}
 		}
@@ -79,7 +79,7 @@ class AllPairsShortestPath {
 	}
 
 public:
-	static std::pair<double, std::uint64_t> compute_apsp(const DistributedGraph& graph) {		
+	static std::pair<double, std::uint64_t> compute_apsp(const DistributedGraph& graph) {
 		const auto my_rank = MPIWrapper::get_my_rank();
 
 		const auto number_local_nodes = graph.get_number_local_nodes();
@@ -98,7 +98,7 @@ public:
 
 		for (auto node_id = 0; node_id < number_local_nodes; node_id++) {
 			const auto [sssp, infs] = compute_sssp(graph, node_id, total_number_nodes, prefix_distribution);
-			sum  += sssp;
+			sum += sssp;
 			inf_counter += infs;
 
 			if (node_id % static_cast<int>(status_step) == 0 && status_counter < 100) {
@@ -117,6 +117,6 @@ public:
 
 		const auto total_infs = MPIWrapper::reduce_sum(inf_counter);
 
-		return { total_sum / ((total_number_nodes * total_number_nodes) - inf_counter), total_infs};
+		return { total_sum / ((total_number_nodes * total_number_nodes) - inf_counter), total_infs };
 	}
 };
