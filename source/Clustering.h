@@ -66,7 +66,7 @@ public:
 
 			if (node_id % static_cast<int>(status_step) == 0 && status_counter < 100) {
 				status_counter++;
-				Status::report_status(node_id, total_number_nodes, "APSP");
+				Status::report_status(node_id, total_number_nodes, "Clustering Coefficient");
 			}
 		}
 
@@ -74,7 +74,7 @@ public:
 
 		graph.unlock_all_rma_windows();
 
-		Status::report_status(number_local_nodes, total_number_nodes, "APSP");
+		Status::report_status(number_local_nodes, total_number_nodes, "Clustering Coefficient");
 
 		const auto sum_clustering_coefficient = MPIWrapper::reduce_sum(sum_clustering_coefficient_locally);
 		const auto average_clustering_coefficient = sum_clustering_coefficient / total_number_nodes;
