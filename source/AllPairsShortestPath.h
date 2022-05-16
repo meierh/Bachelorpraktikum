@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Distance.h"
 #include "DistributedGraph.h"
 #include "MPIWrapper.h"
 #include "NodeCounter.h"
@@ -17,27 +18,14 @@
 #include <iostream>
 #include <sstream>
 
-struct VertexDistanceTriple {
-	int mpi_rank;
-	int node_id;
-	unsigned int distance;
-};
-
-template <>
-struct std::greater<VertexDistanceTriple> {
-	bool operator()(const VertexDistanceTriple& lhs, const VertexDistanceTriple& rhs) const {
-		return lhs.distance > rhs.distance;
-	}
-};
-
 class AllPairsShortestPath {
-	static std::tuple<double, double, std::uint64_t> compute_sssp(const DistributedGraph& graph, int node_id, std::uint64_t total_number_nodes, const std::vector<std::uint64_t>& prefix_distribution) {
+	static std::tuple<double, double, std::uint64_t> compute_sssp(const DistributedGraph& graph, unsigned int node_id, std::uint64_t total_number_nodes, const std::vector<std::uint64_t>& prefix_distribution) {
 		const auto my_rank = MPIWrapper::get_my_rank();
 
 		std::ofstream log_file{ std::string("log_apsp_") + std::to_string(my_rank) + ".log" };
 
 		std::vector<double> distances(total_number_nodes, std::numeric_limits<double>::infinity());
-		std::priority_queue<VertexDistanceTriple, std::vector<VertexDistanceTriple>, std::greater<VertexDistanceTriple>> shortest_paths_queue{};
+		std::priority_queue<VertexDistance, std::vector<VertexDistance>, std::greater<VertexDistance>> shortest_paths_queue{};
 
 		const auto root_id = prefix_distribution[my_rank] + node_id;
 
@@ -54,10 +42,13 @@ class AllPairsShortestPath {
 				const auto new_distance = current_distance + std::abs(weight);
 
 				const auto other_node_id = prefix_distribution[target_rank] + target_id;
-				if (distances[other_node_id] > new_distance) {
-					distances[other_node_id] = new_distance;
-					shortest_paths_queue.emplace(target_rank, target_id, new_distance);
+
+				if (distances[other_node_id] <= new_distance) {
+					continue;
 				}
+
+				distances[other_node_id] = new_distance;
+				shortest_paths_queue.emplace(target_rank, target_id, new_distance);
 			}
 		}
 
@@ -102,7 +93,7 @@ public:
 
 		graph.lock_all_rma_windows();
 
-		for (auto node_id = 0; node_id < number_local_nodes; node_id++) {
+		for (auto node_id = 0U; node_id < number_local_nodes; node_id++) {
 			const auto [sum_shortest_path_from_node, sum_efficiency_from_node, number_unreachables_from_node]
 				= compute_sssp(graph, node_id, total_number_nodes, prefix_distribution);
 

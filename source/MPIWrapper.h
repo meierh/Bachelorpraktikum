@@ -7,6 +7,9 @@
 #include <memory>
 #include <vector>
 
+#include <sstream>
+#include <iostream>
+
 inline int do_nothing(void*) {
 	return 0;
 }
@@ -18,7 +21,7 @@ struct RMAWindow {
 	std::vector<T*> base_pointers{};
 	T* my_base_pointer{};
 
-	RMAWindow() { }
+	RMAWindow() {}
 
 	RMAWindow(T* ptr) : my_base_pointer(ptr) {
 
@@ -38,6 +41,19 @@ class MPIWrapper {
 	inline static std::vector<MPI_Win> windows{};
 	inline static std::vector<void*> memories{};
 
+	inline static MPI_Op vector_sum_op{};
+
+	static void vector_sum_function(void* in, void* in_out, int* len, MPI_Datatype* datatype) {
+		auto* in_double = static_cast<double*>(in);
+		auto* in_out_double = static_cast<double*>(in_out);
+
+		int length = *len;
+
+		for (auto i = 0; i < length; i++) {
+			in_out_double[i] += in_double[i];
+		}
+	}
+
 public:
 	static void init(int argument_count, char* arguments[]) {
 		if (const auto error_code = MPI_Init(&argument_count, &arguments); error_code != 0) {
@@ -54,6 +70,11 @@ public:
 			std::cout << "Fetching my communicator id returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
+
+		if (const auto error_code = MPI_Op_create(vector_sum_function, 1, &vector_sum_op); error_code != 0) {
+			std::cout << "Creating the user-defined operation returned the error: " << error_code << std::endl;
+			throw error_code;
+		}
 	}
 
 	static void finalize() {
@@ -65,6 +86,11 @@ public:
 
 		for (auto* ptr : memories) {
 			MPI_Free_mem(ptr);
+		}
+
+		if (const auto error_code = MPI_Op_free(&vector_sum_op); error_code != 0) {
+			std::cout << "Freeing the user-defined function returned the error: " << error_code;
+			throw error_code;
 		}
 
 		if (const auto error_code = MPI_Finalize(); error_code != 0) {
@@ -161,6 +187,24 @@ public:
 		return total_value;
 	}
 
+	static std::vector<double> reduce_componentwise(const std::vector<double>& values) {
+		const auto number_values = values.size();
+		const auto minimum_number_values = all_reduce_min(number_values);
+
+		if (number_values != minimum_number_values) {
+			std::cout << "Reducing componentwise with differently sized vectors!\n";
+			throw number_values;
+		}
+
+		std::vector<double> buffer(number_values, 0.0);
+		if (const auto error_code = MPI_Reduce(values.data(), buffer.data(), number_values, MPI_DOUBLE, vector_sum_op, 0, MPI_COMM_WORLD); error_code != 0) {
+			std::cout << "Reducing componentwise returned the error: " << error_code << std::endl;
+			throw error_code;
+		}
+
+		return buffer;
+	}
+
 	static double reduce_sum(double value) {
 		double total_value = 0;
 
@@ -176,6 +220,17 @@ public:
 		std::uint64_t total_value = 0;
 
 		if (const auto error_code = MPI_Allreduce(&value, &total_value, 1, MPI_UINT64_T, MPI_SUM, MPI_COMM_WORLD); error_code != 0) {
+			std::cout << "All-reducing all values returned the error: " << error_code << std::endl;
+			throw error_code;
+		}
+
+		return total_value;
+	}
+
+	static std::uint64_t all_reduce_min(std::uint64_t value) {
+		std::uint64_t total_value = 0;
+
+		if (const auto error_code = MPI_Allreduce(&value, &total_value, 1, MPI_UINT64_T, MPI_MIN, MPI_COMM_WORLD); error_code != 0) {
 			std::cout << "All-reducing all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}

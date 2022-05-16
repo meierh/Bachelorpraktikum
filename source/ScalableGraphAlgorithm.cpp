@@ -2,6 +2,7 @@
 #include "MPIWrapper.h"
 
 #include "AllPairsShortestPath.h"
+#include "Centrality.h"
 #include "Clustering.h"
 #include "DegreeCounter.h"
 #include "EdgeCounter.h"
@@ -12,6 +13,7 @@
 #include <CLI/Config.hpp>
 #include <CLI/Formatter.hpp>
 
+#include <csignal>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -42,6 +44,8 @@ void calculate_metrics(std::filesystem::path input_directory) {
 
 	const auto [average_shortest_path, global_efficiency, number_unreachables] = AllPairsShortestPath::compute_apsp(dg);
 
+	const auto average_betweenness_centrality = BetweennessCentrality::compute_average_betweenness_centrality(dg);
+
 	const auto average_cluster_coefficient = Clustering::compuate_average_clustering_coefficient(dg);
 
 	if (my_rank == 0) {
@@ -54,6 +58,7 @@ void calculate_metrics(std::filesystem::path input_directory) {
 		std::cout << "The average shortest path is " << average_shortest_path << ", however, " << number_unreachables << " pairs had no path.\n";
 		std::cout << "The global efficiency is " << global_efficiency << ", however, " << number_unreachables << " pairs had no path.\n";
 		std::cout << "The average clustering coefficient is: " << average_cluster_coefficient << '\n';
+		std::cout << "The average betweenness centrality is: " << average_betweenness_centrality << '\n';
 		fflush(stdout);
 	}
 }

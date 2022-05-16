@@ -309,6 +309,11 @@ void DistributedGraph::load_nodes(const std::filesystem::path& path) {
 			continue;
 		}
 
+		if (id >= std::numeric_limits<unsigned int>::max()) {
+			std::cout << "The loaded id: " << id << " is larger than the maximum value of unsigned int.\n";
+			continue;
+		}
+
 		positions.emplace_back(pos_x, pos_y, pos_z);
 	}
 
@@ -331,7 +336,7 @@ void DistributedGraph::load_in_edges(const std::filesystem::path& path) {
 	const auto my_rank = MPIWrapper::get_my_rank();
 
 	std::string line{};
-	std::map<int, std::vector<InEdge>> all_in_edges{};
+	std::map<unsigned int, std::vector<InEdge>> all_in_edges{};
 
 	auto loaded_in_edges = 0;
 
@@ -343,10 +348,10 @@ void DistributedGraph::load_in_edges(const std::filesystem::path& path) {
 		std::istringstream iss{ line };
 
 		int target_rank{};
-		int target_id{};
+		unsigned int target_id{};
 
 		int source_rank{};
-		int source_id{};
+		unsigned int  source_id{};
 
 		int weight{};
 
@@ -419,7 +424,7 @@ void DistributedGraph::load_out_edges(const std::filesystem::path& path) {
 	const auto my_rank = MPIWrapper::get_my_rank();
 
 	std::string line{};
-	std::map<int, std::vector<InEdge>> all_out_edges{};
+	std::map<unsigned int, std::vector<InEdge>> all_out_edges{};
 
 	auto loaded_out_edges = 0;
 
@@ -431,10 +436,10 @@ void DistributedGraph::load_out_edges(const std::filesystem::path& path) {
 		std::istringstream iss{ line };
 
 		int target_rank{};
-		int target_id{};
+		unsigned int target_id{};
 
 		int source_rank{};
-		int source_id{};
+		unsigned int  source_id{};
 
 		int weight{};
 
