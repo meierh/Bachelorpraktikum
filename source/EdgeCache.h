@@ -31,7 +31,7 @@ public:
 		return where_it != entry.cend();
 	}
 
-	std::vector<EdgeType> get_value(int rank, int node_id) {
+	const std::vector<EdgeType>& get_value(int rank, int node_id) {
 		return cache[rank][node_id];
 	}
 

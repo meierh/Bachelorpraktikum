@@ -36,7 +36,7 @@ class AllPairsShortestPath {
 			const auto [current_rank, current_id, current_distance] = shortest_paths_queue.top();
 			shortest_paths_queue.pop();
 
-			const auto out_edges = graph.get_out_edges(current_rank, current_id);
+			const auto& out_edges = graph.get_out_edges(current_rank, current_id);
 
 			for (const auto& [target_rank, target_id, weight] : out_edges) {
 				const auto new_distance = current_distance + std::abs(weight);

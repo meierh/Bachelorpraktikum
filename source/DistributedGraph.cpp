@@ -145,39 +145,37 @@ InEdge DistributedGraph::get_in_edge(const int mpi_rank, const int node_id, cons
 	return edge;
 }
 
-std::vector<InEdge> DistributedGraph::get_in_edges(const int mpi_rank, const int node_id) const {
-	if (in_edge_cache.contains(mpi_rank, node_id)) {
-		return in_edge_cache.get_value(mpi_rank, node_id);
+const std::vector<InEdge>& DistributedGraph::get_in_edges(const int mpi_rank, const int node_id) const {
+	if (!in_edge_cache.contains(mpi_rank, node_id)) {
+		const auto number_in_edges = get_number_in_edges(mpi_rank, node_id);
+
+		std::vector<InEdge> edges{};
+		edges.resize(number_in_edges);
+
+		std::uint64_t prefix_in_edge{};
+
+		MPI_Request request_item{};
+
+		const auto error_code_1 = MPI_Rget(&prefix_in_edge, 1, MPI_UINT64_T, mpi_rank, 8 * node_id, 1, MPI_UINT64_T, prefix_in_edges_window.window, &request_item);
+		MPI_Wait(&request_item, MPI_STATUS_IGNORE);
+
+		if (error_code_1 != MPI_SUCCESS) {
+			std::cout << "Fetching a remote value returned the error code: " << error_code_1 << std::endl;
+			throw error_code_1;
+		}
+
+		const auto error_code_2 = MPI_Rget(edges.data(), sizeof(InEdge) * number_in_edges, MPI_BYTE, mpi_rank, prefix_in_edge * sizeof(InEdge), sizeof(InEdge) * number_in_edges, MPI_BYTE, in_edges_window.window, &request_item);
+		MPI_Wait(&request_item, MPI_STATUS_IGNORE);
+
+		if (error_code_2 != MPI_SUCCESS) {
+			std::cout << "Fetching a remote value returned the error code: " << error_code_2 << std::endl;
+			throw error_code_2;
+		}
+
+		in_edge_cache.insert(mpi_rank, node_id, std::move(edges));
 	}
 
-	const auto number_in_edges = get_number_in_edges(mpi_rank, node_id);
-
-	std::vector<InEdge> edges{};
-	edges.resize(number_in_edges);
-
-	std::uint64_t prefix_in_edge{};
-
-	MPI_Request request_item{};
-
-	const auto error_code_1 = MPI_Rget(&prefix_in_edge, 1, MPI_UINT64_T, mpi_rank, 8 * node_id, 1, MPI_UINT64_T, prefix_in_edges_window.window, &request_item);
-	MPI_Wait(&request_item, MPI_STATUS_IGNORE);
-
-	if (error_code_1 != MPI_SUCCESS) {
-		std::cout << "Fetching a remote value returned the error code: " << error_code_1 << std::endl;
-		throw error_code_1;
-	}
-
-	const auto error_code_2 = MPI_Rget(edges.data(), sizeof(InEdge) * number_in_edges, MPI_BYTE, mpi_rank, prefix_in_edge * sizeof(InEdge), sizeof(InEdge) * number_in_edges, MPI_BYTE, in_edges_window.window, &request_item);
-	MPI_Wait(&request_item, MPI_STATUS_IGNORE);
-
-	if (error_code_2 != MPI_SUCCESS) {
-		std::cout << "Fetching a remote value returned the error code: " << error_code_2 << std::endl;
-		throw error_code_2;
-	}
-
-	in_edge_cache.insert(mpi_rank, node_id, edges);
-
-	return edges;
+	return in_edge_cache.get_value(mpi_rank, node_id);
 }
 
 OutEdge DistributedGraph::get_out_edge(const int mpi_rank, const int node_id, const int edge_id) const {
@@ -214,39 +212,37 @@ OutEdge DistributedGraph::get_out_edge(const int mpi_rank, const int node_id, co
 	return edge;
 }
 
-std::vector<OutEdge> DistributedGraph::get_out_edges(const int mpi_rank, const int node_id) const {
-	if (out_edge_cache.contains(mpi_rank, node_id)) {
-		return out_edge_cache.get_value(mpi_rank, node_id);
+const std::vector<OutEdge>& DistributedGraph::get_out_edges(const int mpi_rank, const int node_id) const {
+	if (!out_edge_cache.contains(mpi_rank, node_id)) {
+		const auto number_out_edges = get_number_out_edges(mpi_rank, node_id);
+
+		std::vector<OutEdge> edges{};
+		edges.resize(number_out_edges);
+
+		std::uint64_t prefix_out_edge{};
+
+		MPI_Request request_item{};
+
+		const auto error_code_1 = MPI_Rget(&prefix_out_edge, 1, MPI_UINT64_T, mpi_rank, 8 * node_id, 1, MPI_UINT64_T, prefix_out_edges_window.window, &request_item);
+		MPI_Wait(&request_item, MPI_STATUS_IGNORE);
+
+		if (error_code_1 != MPI_SUCCESS) {
+			std::cout << "Fetching a remote value returned the error code: " << error_code_1 << std::endl;
+			throw error_code_1;
+		}
+
+		const auto error_code_2 = MPI_Rget(edges.data(), sizeof(InEdge) * number_out_edges, MPI_BYTE, mpi_rank, prefix_out_edge * sizeof(InEdge), sizeof(InEdge) * number_out_edges, MPI_BYTE, out_edges_window.window, &request_item);
+		MPI_Wait(&request_item, MPI_STATUS_IGNORE);
+
+		if (error_code_2 != MPI_SUCCESS) {
+			std::cout << "Fetching a remote value returned the error code: " << error_code_2 << std::endl;
+			throw error_code_2;
+		}
+
+		out_edge_cache.insert(mpi_rank, node_id, std::move(edges));
 	}
 
-	const auto number_out_edges = get_number_out_edges(mpi_rank, node_id);
-
-	std::vector<OutEdge> edges{};
-	edges.resize(number_out_edges);
-
-	std::uint64_t prefix_out_edge{};
-
-	MPI_Request request_item{};
-
-	const auto error_code_1 = MPI_Rget(&prefix_out_edge, 1, MPI_UINT64_T, mpi_rank, 8 * node_id, 1, MPI_UINT64_T, prefix_out_edges_window.window, &request_item);
-	MPI_Wait(&request_item, MPI_STATUS_IGNORE);
-
-	if (error_code_1 != MPI_SUCCESS) {
-		std::cout << "Fetching a remote value returned the error code: " << error_code_1 << std::endl;
-		throw error_code_1;
-	}
-
-	const auto error_code_2 = MPI_Rget(edges.data(), sizeof(InEdge) * number_out_edges, MPI_BYTE, mpi_rank, prefix_out_edge * sizeof(InEdge), sizeof(InEdge) * number_out_edges, MPI_BYTE, out_edges_window.window, &request_item);
-	MPI_Wait(&request_item, MPI_STATUS_IGNORE);
-
-	if (error_code_2 != MPI_SUCCESS) {
-		std::cout << "Fetching a remote value returned the error code: " << error_code_2 << std::endl;
-		throw error_code_2;
-	}
-
-	out_edge_cache.insert(mpi_rank, node_id, edges);
-
-	return edges;
+	return out_edge_cache.get_value(mpi_rank, node_id);
 }
 
 void DistributedGraph::lock_all_rma_windows() const {

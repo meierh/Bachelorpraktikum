@@ -21,11 +21,11 @@ public:
 
 	InEdge get_in_edge(int mpi_rank, int node_id, int edge_id) const;
 
-	std::vector<InEdge> get_in_edges(int mpi_rank, int node_id) const;
+	const std::vector<InEdge>& get_in_edges(int mpi_rank, int node_id) const;
 
 	OutEdge get_out_edge(int mpi_rank, int node_id, int edge_id) const;
 
-	std::vector<OutEdge> get_out_edges(int mpi_rank, int node_id) const;
+	const std::vector<OutEdge>& get_out_edges(int mpi_rank, int node_id) const;
 
 	std::uint64_t get_number_local_nodes() const noexcept {
 		return local_number_nodes;
