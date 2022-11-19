@@ -113,6 +113,8 @@ private:
 	void load_out_edges(const std::filesystem::path& path);
 
 	RMAWindow<Vec3d> nodes_window{};
+	RMAWindow<std::string> area_names_window;
+	RMAWindow<std::string> signal_types_window;
 
 	RMAWindow<InEdge> in_edges_window{};
 	RMAWindow<std::uint64_t> prefix_in_edges_window{};
