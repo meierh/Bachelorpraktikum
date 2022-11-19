@@ -20,6 +20,50 @@ public:
 		return position;
 	}
 
+	std::string get_node_area_name(int mpi_rank, int node_id) const {
+		if (const auto my_rank = MPIWrapper::get_my_rank(); my_rank == mpi_rank) {
+			const auto* const area_names_ptr = area_names_window.my_base_pointer;
+			const auto area_name = area_names_ptr[node_id];
+			return area_name;
+		}
+
+		std::string area_name{};
+
+		MPI_Request request_item{};
+
+		const auto error_code = MPI_Rget(&area_name, sizeof(std::string), MPI_BYTE, mpi_rank, sizeof(std::string) * node_id, sizeof(std::string), MPI_BYTE, area_names_window.window, &request_item);
+		MPI_Wait(&request_item, MPI_STATUS_IGNORE);
+
+		if (error_code != MPI_SUCCESS) {
+			std::cout << "Fetching a remote value returned the error code: " << error_code << std::endl;
+			throw error_code;
+		}
+
+		return area_name;
+	}
+	
+	std::string get_node_signal_type(int mpi_rank, int node_id) const {
+		if (const auto my_rank = MPIWrapper::get_my_rank(); my_rank == mpi_rank) {
+			const auto* const signal_types_ptr = signal_types_window.my_base_pointer;
+			const auto signal_type = signal_types_ptr[node_id];
+			return signal_type;
+		}
+
+		std::string signal_type{};
+
+		MPI_Request request_item{};
+
+		const auto error_code = MPI_Rget(&signal_type, sizeof(std::string), MPI_BYTE, mpi_rank, sizeof(std::string) * node_id, sizeof(std::string), MPI_BYTE, signal_types_window.window, &request_item);
+		MPI_Wait(&request_item, MPI_STATUS_IGNORE);
+
+		if (error_code != MPI_SUCCESS) {
+			std::cout << "Fetching a remote value returned the error code: " << error_code << std::endl;
+			throw error_code;
+		}
+
+		return signal_type;
+	}
+	
 	std::uint64_t get_number_in_edges(int mpi_rank, int node_id) const {
 		std::uint64_t number_in_edges;
 		MPIWrapper::passive_sync_RMA_get<std::uint64_t>(&number_in_edges,1,node_id,mpi_rank,MPI_UINT64_T,
