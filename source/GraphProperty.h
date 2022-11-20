@@ -2,6 +2,7 @@
 
 #include "DistributedGraph.h"
 #include "MPIWrapper.h"
+#include <numeric>
 
 class GraphProperty {
 public:
@@ -12,5 +13,11 @@ public:
      * Parameter: A DistributedGraph (Function is MPI compliant)
      * Return: OPEN  
      */
-    static int areaConnectivityStrength(const DistributedGraph& graph);
+    struct stdPair_hash
+    {template <class T1, class T2>
+        std::size_t operator () (const std::pair<T1,T2> &p) const 
+        {return std::hash<T1>{}(p.first) ^  std::hash<T2>{}(p.second);}
+    };
+    using AreaConnecMap = std::unordered_map<std::pair<std::string,std::string>,int,stdPair_hash>;
+    static std::unique_ptr<AreaConnecMap> areaConnectivityStrength(const DistributedGraph& graph,int resultToRank=0);
 };
