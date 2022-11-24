@@ -8,6 +8,14 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
 {
     AreaConnecMap areaConnectivityStrengthMapLocal;
     const int my_rank = MPIWrapper::get_my_rank();
+    std::unordered_multimap<int,std::pair<int,int>> rankToNodeAndArea
+    for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
+    {
+        const std::vector<InEdge>& iEdges = graph.get_out_edges(my_rank,node_local_ind);
+        
+
+    }
+    
     std::uint64_t number_local_nodes = graph.get_number_local_nodes();
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
     {

@@ -20,18 +20,18 @@ public:
 		return position;
 	}
 
-	std::string get_node_area_name(int mpi_rank, int node_id) const {
+	std::uint64_t get_node_area_localID(int mpi_rank, int node_id) const {
 		if (const auto my_rank = MPIWrapper::get_my_rank(); my_rank == mpi_rank) {
-			const auto* const area_names_ptr = area_names_window.my_base_pointer;
-			const auto area_name = area_names_ptr[node_id];
-			return area_name;
+			const auto* const area_names_ind_ptr = area_names_ind_window.my_base_pointer;
+			const auto area_name_ind = area_names_ind_ptr[node_id];
+			return area_name_ind;
 		}
 
-		std::string area_name{};
+		std::uint64_t area_name_ind{};
 
 		MPI_Request request_item{};
 
-		const auto error_code = MPI_Rget(&area_name, sizeof(std::string), MPI_BYTE, mpi_rank, sizeof(std::string) * node_id, sizeof(std::string), MPI_BYTE, area_names_window.window, &request_item);
+		const auto error_code = MPI_Rget(&area_name_ind, sizeof(std::uint64_t), MPI_BYTE, mpi_rank, sizeof(std::uint64_t) * node_id, sizeof(std::uint64_t), MPI_BYTE, area_names_ind_window.window, &request_item);
 		MPI_Wait(&request_item, MPI_STATUS_IGNORE);
 
 		if (error_code != MPI_SUCCESS) {
@@ -39,21 +39,21 @@ public:
 			throw error_code;
 		}
 
-		return area_name;
+		return area_name_ind;
 	}
 	
-	std::string get_node_signal_type(int mpi_rank, int node_id) const {
+	std::uint64_t get_node_signal_localID(int mpi_rank, int node_id) const {
 		if (const auto my_rank = MPIWrapper::get_my_rank(); my_rank == mpi_rank) {
-			const auto* const signal_types_ptr = signal_types_window.my_base_pointer;
-			const auto signal_type = signal_types_ptr[node_id];
-			return signal_type;
+			const auto* const signal_types_ind_ptr = signal_types_ind_window.my_base_pointer;
+			const auto signal_type_ind = signal_types_ind_ptr[node_id];
+			return signal_type_ind;
 		}
 
-		std::string signal_type{};
+		std::uint64_t signal_type_ind{};
 
 		MPI_Request request_item{};
 
-		const auto error_code = MPI_Rget(&signal_type, sizeof(std::string), MPI_BYTE, mpi_rank, sizeof(std::string) * node_id, sizeof(std::string), MPI_BYTE, signal_types_window.window, &request_item);
+		const auto error_code = MPI_Rget(&signal_type_ind, sizeof(std::uint64_t), MPI_BYTE, mpi_rank, sizeof(std::uint64_t) * node_id, sizeof(std::uint64_t), MPI_BYTE, signal_types_ind_window.window, &request_item);
 		MPI_Wait(&request_item, MPI_STATUS_IGNORE);
 
 		if (error_code != MPI_SUCCESS) {
@@ -61,7 +61,7 @@ public:
 			throw error_code;
 		}
 
-		return signal_type;
+		return signal_type_ind;
 	}
 	
 	std::uint64_t get_number_in_edges(int mpi_rank, int node_id) const {
@@ -157,8 +157,10 @@ private:
 	void load_out_edges(const std::filesystem::path& path);
 
 	RMAWindow<Vec3d> nodes_window{};
-	RMAWindow<std::string> area_names_window;
-	RMAWindow<std::string> signal_types_window;
+	RMAWindow<std::uint64_t> area_names_ind_window{};
+	RMAWindow<std::uint64_t> signal_types_ind_window{};	
+	std::vector<std::string> area_names;
+	std::vector<std::string> signal_types;
 
 	RMAWindow<InEdge> in_edges_window{};
 	RMAWindow<std::uint64_t> prefix_in_edges_window{};
