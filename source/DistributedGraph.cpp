@@ -13,10 +13,10 @@
 DistributedGraph::DistributedGraph(const std::filesystem::path& path) {
 	const auto my_rank = MPIWrapper::get_my_rank();
 
-	const auto& rank_prefix = std::string("rank_") + std::to_string(my_rank);
+	const auto& rank_prefix = std::string("rank_") + std::to_string(my_rank); // my_rank must be three digits?
 	const auto& positions_file = rank_prefix + "_positions.txt";
-	const auto& in_edges_file = rank_prefix + "_in_edges.txt";
-	const auto& out_edges_file = rank_prefix + "_out_edges.txt";
+	const auto& in_edges_file = rank_prefix + "_in_edges.txt"; // new format: "_in_network.txt"
+	const auto& out_edges_file = rank_prefix + "_out_edges.txt"; // new format: "_out_network.txt"
 
 	const auto& positions = path / positions_file;
 	const auto& in_edges = path / in_edges_file;
