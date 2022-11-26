@@ -19,5 +19,7 @@ public:
         {return std::hash<T1>{}(p.first) ^  std::hash<T2>{}(p.second);}
     };
     using AreaConnecMap = std::unordered_map<std::pair<std::string,std::string>,int,stdPair_hash>;
+    using AreaLocalID = std::pair<std::uint64_t,std::uint64_t>;
+    using AreaIDConnecMap = std::unordered_map<std::pair<AreaLocalID,AreaLocalID>,int,stdPair_hash>;
     static std::unique_ptr<AreaConnecMap> areaConnectivityStrength(const DistributedGraph& graph,int resultToRank=0);
 };

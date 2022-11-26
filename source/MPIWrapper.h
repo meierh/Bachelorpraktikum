@@ -357,4 +357,29 @@ public:
 		}
 		unlock_window(src_rank,rma_window.window);
 	}
+
+	static void Irecv(void* buffer,int count,MPI_Datatype datatype,int source,int tag,MPI_Request *request){
+		if(const int error_code = MPI_Irecv(buffer,count,datatype,source,tag,MPI_COMM_WORLD,request); error_code != 0){
+			std::cout << "Irecv returned the error: " << error_code << std::endl;
+			throw error_code;
+		}
+	}
+	
+	static void Isend(void* buffer,int count,MPI_Datatype datatype,int dest,int tag,MPI_Request *request){
+		if(const int error_code = MPI_Isend(buffer,count,datatype,dest,tag,MPI_COMM_WORLD,request); error_code != 0){
+			std::cout << "Isend returned the error: " << error_code << std::endl;
+			throw error_code;
+		}
+	}
+	
+	static void Waitall(int count, MPI_Request array_of_requests[]){
+		MPI_Status array_of_statuses[count];
+		if(const int error_code = MPI_Waitall(count,array_of_requests,array_of_statuses); error_code != 0){
+			std::cout << "Waitall returned the error: " << error_code << std::endl;
+			for(int i=0; i<count; i++){
+				std::cout <<"Source "<<array_of_statuses[i].MPI_SOURCE <<" returned the error: " << error_code <<" in Waitall with Tag value "<<array_of_statuses[i].MPI_TAG<< std::endl;
+			}
+			throw error_code;
+		}
+	}
 };
