@@ -120,17 +120,18 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
             std::uint64_t otherID = oEdge.target_id;
             
             int ind = treated_ranks_to_pair_ind_size_recv[otherRank].first;
-            rank_ind_to_local_NodeID
             
-            const AreaLocalID target_area_ID(otherRank,...);
+            const AreaLocalID target_area_ID(otherRank,-1);
+            
+            std::pair<AreaLocalID,AreaLocalID> area_to_area;
+
             
             // Non existend key has the value 0 because of value initialization
             // https://en.cppreference.com/w/cpp/container/unordered_map/operator_at
-            areaConnectivityStrengthMapLocal[area_to_area]+=oEdge.weight;
+            //areaIDConnecStrengthMapLocal[area_to_area]+=oEdge.weight;
         }
     }
-    
-    
+
     std::vector<std::string> sourceArea;
     std::vector<int> sourceAreaStringLen;
     std::vector<std::string> targetArea;
@@ -138,6 +139,7 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     std::vector<int> weightSum;
     int nbrOfEntries = sourceArea.size();
     
+    /*
     for(auto keyValue = areaConnectivityStrengthMapLocal.begin();
         keyValue != areaConnectivityStrengthMapLocal.end();
         ++keyValue)
@@ -149,6 +151,7 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
         targetAreaStringLen.push_back(sourceArea_targetArea.second.size());
         weightSum.push_back(keyValue->second);
     }
+    */
 
     std::unique_ptr<AreaConnecMap> result;
     if(my_rank==resultToRank)
