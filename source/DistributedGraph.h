@@ -145,6 +145,10 @@ public:
 		return local_number_out_edges;
 	}
 
+	const std::vector<std::string>& get_area_names() const noexcept {
+		return area_names;
+	}
+	
 	void lock_all_rma_windows() const;
 
 	void unlock_all_rma_windows() const;

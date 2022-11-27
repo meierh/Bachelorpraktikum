@@ -13,7 +13,7 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     //prepare buffer for areaID data from other ranks
     std::unordered_map<int,std::pair<int,int>> treated_ranks_to_pair_ind_size_recv;
     std::vector<int> ranks_recv;
-    std::vector<std::vector<std::uint64_t>> rank_ind_to_local_NodeID;
+    std::vector<std::unordered_map<std::uint64_t,int>> rank_ind_NodeID_to_localInd;
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
     {
         const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank,node_local_ind);
@@ -22,16 +22,23 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
             const auto rank_ind = treated_ranks_to_pair_ind_size_recv.find(oEdge.target_rank);
             if(rank_ind != treated_ranks_to_pair_ind_size_recv.end())
             {
-                rank_ind_to_local_NodeID[rank_ind->second.first].push_back(node_local_ind);
+                rank_ind_NodeID_to_localInd[rank_ind->second.first].insert
+                (
+                    std::pair<std::uint64_t,int>
+                    (
+                        node_local_ind,
+                        treated_ranks_to_pair_ind_size_recv[oEdge.target_rank].second
+                    )
+                );
             }
             else
-            {     
+            {
                 treated_ranks_to_pair_ind_size_recv.insert
                 (
                     std::pair<int,std::pair<int,int>>(oEdge.target_rank,{ranks_recv.size(),0})
                 );
                 ranks_recv.push_back(oEdge.target_rank);
-                rank_ind_to_local_NodeID.push_back({node_local_ind});
+                rank_ind_NodeID_to_localInd.push_back({{node_local_ind,0}});
             }
             treated_ranks_to_pair_ind_size_recv[oEdge.target_rank].second++;
         }
@@ -103,13 +110,12 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
         MPIWrapper::Isend(buffer,count,MPI_UINT64_T,target_rank,tag,request);
     }
  
+    //Wait for send and recv completion
     MPIWrapper::Waitall(ranks_recv.size(),requestArrayRecv.get());
     MPIWrapper::Waitall(ranks_send.size(),requestArraySend.get());
-
     
-    AreaIDConnecMap areaIDConnecStrengthMapLocal;
-    std::unordered_multimap<int,std::pair<int,int>> rankToNodeAndArea;
-    
+    //Create rank local area distance sum
+    AreaIDConnecMap areaIDConnecStrengthMapLocal;    
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
     {
         const AreaLocalID source_area_ID(my_rank,graph.get_node_area_localID(my_rank,node_local_ind));
@@ -119,118 +125,121 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
             std::uint64_t otherRank = oEdge.target_rank;
             std::uint64_t otherID = oEdge.target_id;
             
-            int ind = treated_ranks_to_pair_ind_size_recv[otherRank].first;
+            int rank_local_ind = treated_ranks_to_pair_ind_size_recv[otherRank].first;
+            int nodeID_localInd = rank_ind_NodeID_to_localInd[rank_local_ind][node_local_ind];
             
-            const AreaLocalID target_area_ID(otherRank,-1);
-            
-            std::pair<AreaLocalID,AreaLocalID> area_to_area;
+            AreaLocalID target_area_ID(otherRank,rank_ind_to_area_ind_list_recv[rank_local_ind][nodeID_localInd]);
+            std::pair<AreaLocalID,AreaLocalID> area_to_area(source_area_ID,target_area_ID);
 
-            
             // Non existend key has the value 0 because of value initialization
             // https://en.cppreference.com/w/cpp/container/unordered_map/operator_at
             areaIDConnecStrengthMapLocal[area_to_area]+=oEdge.weight;
         }
     }
-
-    std::vector<std::string> sourceArea;
-    std::vector<int> sourceAreaStringLen;
-    std::vector<std::string> targetArea;
-    std::vector<int> targetAreaStringLen;
-    std::vector<int> weightSum;
-    int nbrOfEntries = sourceArea.size();
     
-    /*
-    for(auto keyValue = areaConnectivityStrengthMapLocal.begin();
-        keyValue != areaConnectivityStrengthMapLocal.end();
-        ++keyValue)
+    //Exchange of area local ind and strings
+    std::unordered_map<AreaLocalID,std::string,stdPair_hash> areaID_to_name;
+    std::vector<int> area_names_char_dist;
+    const std::vector<std::string> area_names = graph.get_area_names();
+    for(const std::string& name : area_names)
     {
-        auto& sourceArea_targetArea = keyValue->first;        
-        sourceArea.push_back(sourceArea_targetArea.first);
-        sourceAreaStringLen.push_back(sourceArea_targetArea.first.size());
-        targetArea.push_back(sourceArea_targetArea.second);
-        targetAreaStringLen.push_back(sourceArea_targetArea.second.size());
-        weightSum.push_back(keyValue->second);
+        area_names_char_dist.push_back(name.size());
     }
-    */
-
-    std::unique_ptr<AreaConnecMap> result;
+    int area_names_totalLength = std::accumulate(area_names_char_dist.begin(),area_names_char_dist.end(),0);
+    auto transmit_area_names = std::make_unique<char[]>(area_names_totalLength);
     if(my_rank==resultToRank)
     {
-        result = std::make_unique<AreaConnecMap>();
         for(int otherRank=0; otherRank<MPIWrapper::get_number_ranks(); otherRank++)
         {
             if(otherRank==resultToRank)
                 continue;
-
-            MPI_Status status;
             
-            int otherRankNbrEntries;
-            MPI_Recv(&otherRankNbrEntries,1,MPI_INT,otherRank,0,MPI_COMM_WORLD,&status);
-            
-            std::vector<int> otherRankSourceAreaStringLen(otherRankNbrEntries);
-            std::vector<int> otherRankTargetAreaStringLen(otherRankNbrEntries);
-            MPI_Recv(otherRankSourceAreaStringLen.data(),otherRankNbrEntries,MPI_INT,otherRank,1,MPI_COMM_WORLD,&status);
-            MPI_Recv(otherRankTargetAreaStringLen.data(),otherRankNbrEntries,MPI_INT,otherRank,2,MPI_COMM_WORLD,&status);
-            
-            std::vector<std::string> otherRankSourceArea(otherRankNbrEntries);
-            std::vector<std::string> otherRankTargetArea(otherRankNbrEntries);
-            int charArraySize =  std::reduce(otherRankSourceAreaStringLen.begin(),otherRankSourceAreaStringLen.end())
-                                +std::reduce(otherRankTargetAreaStringLen.begin(),otherRankTargetAreaStringLen.end());
-            char* AreaCharArray = new char[charArraySize];
-            MPI_Recv(AreaCharArray,charArraySize,MPI_CHAR,otherRank,3,MPI_COMM_WORLD,&status);
+            int nbr_of_area_names;
+            MPIWrapper::Recv(&nbr_of_area_names,1,MPI_INT,otherRank,0);
+            std::vector<int> area_names_char_dist_other(nbr_of_area_names);
+            MPIWrapper::Recv(area_names_char_dist_other.data(),nbr_of_area_names,MPI_INT,otherRank,1);
+            int area_names_totalLength_other = std::accumulate(area_names_char_dist.begin(),area_names_char_dist.end(),0);
+            auto transmit_area_names_other = std::make_unique<char[]>(area_names_totalLength_other);
+            MPIWrapper::Recv(transmit_area_names_other.get(),area_names_totalLength_other,MPI_CHAR,otherRank,3);
+            std::vector<std::string> area_names_other(nbr_of_area_names);
             int pChar=0;
-            for(int i=0;i<otherRankSourceAreaStringLen.size();i++)
+            for(int i=0;i<area_names_other.size();i++)
             {
-                otherRankSourceArea[i] = std::string(&(AreaCharArray[pChar]),otherRankSourceAreaStringLen[i]);
-                pChar+=otherRankSourceAreaStringLen[i];
+                area_names_other[i] = std::string(transmit_area_names_other.get()+pChar,area_names_char_dist_other[i]);
+                pChar+=area_names_char_dist_other[i];
             }
-            for(int i=0;i<otherRankTargetAreaStringLen.size();i++)
+            for(int i=0;i<area_names_other.size();i++)
             {
-                otherRankTargetArea[i] = std::string(&(AreaCharArray[pChar]),otherRankTargetAreaStringLen[i]);
-                pChar+=otherRankTargetAreaStringLen[i];
-            }
-            delete[] AreaCharArray;
-            
-            std::vector<int> otherRankWeightSum(otherRankNbrEntries);
-            MPI_Recv(otherRankWeightSum.data(),otherRankNbrEntries,MPI_INT,otherRank,4,MPI_COMM_WORLD,&status);
-
-            for(int entryI=0;entryI<otherRankNbrEntries;entryI++)
-            {
-                std::pair<std::string,std::string> area_to_area(otherRankSourceArea[entryI],otherRankTargetArea[entryI]);
-                // Non existend key has the value 0 because of value initialization
-                // https://en.cppreference.com/w/cpp/container/unordered_map/operator_at
-                (*result)[area_to_area]+=otherRankWeightSum[entryI];
+                areaID_to_name.insert({{otherRank,i},area_names_other[i]});
             }
         }
-        for(int entryI=0;entryI<nbrOfEntries;entryI++)
+        for(int i=0;i<area_names.size();i++)
         {
-            std::pair<std::string,std::string> area_to_area(sourceArea[entryI],targetArea[entryI]);
-            // Non existend key has the value 0 because of value initialization
-            // https://en.cppreference.com/w/cpp/container/unordered_map/operator_at
-            (*result)[area_to_area]+=weightSum[entryI];
+            areaID_to_name.insert({{my_rank,i},area_names[i]});
         }
     }
     else
     {
-        MPI_Send(&nbrOfEntries,1,MPI_INT,resultToRank,0,MPI_COMM_WORLD);
-        
-        MPI_Send(sourceAreaStringLen.data(),nbrOfEntries,MPI_INT,resultToRank,1,MPI_COMM_WORLD);
-        MPI_Send(targetAreaStringLen.data(),nbrOfEntries,MPI_INT,resultToRank,2,MPI_COMM_WORLD);
-        
-        int charArraySize =  std::reduce(sourceAreaStringLen.begin(),sourceAreaStringLen.end())
-                            +std::reduce(targetAreaStringLen.begin(),targetAreaStringLen.end());
-        char* AreaCharArray = new char[charArraySize];
-        int pChar=0;
-        for(int i=0;i<sourceArea.size();i++)
-            for(int j=0;j<sourceArea[i].size();j++)
-                AreaCharArray[pChar++] = sourceArea[i].c_str()[j];
-        for(int i=0;i<targetArea.size();i++)
-            for(int j=0;j<targetArea[i].size();j++)
-                AreaCharArray[pChar++] = targetArea[i].c_str()[j];
-        MPI_Send(AreaCharArray,charArraySize,MPI_CHAR,resultToRank,3,MPI_COMM_WORLD);
-        delete[] AreaCharArray;
-        
-        MPI_Send(weightSum.data(),nbrOfEntries,MPI_INT,resultToRank,4,MPI_COMM_WORLD);
+        int size = area_names_char_dist.size();
+        MPIWrapper::Send(&size,1,MPI_INT,resultToRank,0);
+        MPIWrapper::Send(area_names_char_dist.data(),area_names_char_dist.size(),MPI_INT,resultToRank,1);
+        MPIWrapper::Send(transmit_area_names.get(),area_names_totalLength,MPI_CHAR,resultToRank,3);
+    }
+    
+    //Send areaID Connec Sums    
+    if(my_rank==resultToRank)
+    {
+        for(int otherRank=0; otherRank<MPIWrapper::get_number_ranks(); otherRank++)
+        {
+            if(otherRank==resultToRank)
+                continue;
+            
+            int nbr_of_area_names;
+            MPIWrapper::Recv(&nbr_of_area_names,1,MPI_INT,otherRank,4);
+            std::vector<std::pair<AreaLocalID,AreaLocalID>> area_to_area_list(nbr_of_area_names);
+            std::vector<int> weightSum_list(nbr_of_area_names);
+            int nbrBytes = nbr_of_area_names*sizeof(std::pair<AreaLocalID,AreaLocalID>);
+            MPIWrapper::Recv(area_to_area_list.data(),nbrBytes,MPI_BYTE,otherRank,5);
+            MPIWrapper::Recv(weightSum_list.data(),nbr_of_area_names,MPI_INT,otherRank,6);
+            
+            for(int i=0;i<nbr_of_area_names;i++)
+            {
+                areaIDConnecStrengthMapLocal[area_to_area_list[i]]+=weightSum_list[i];
+            }
+        }        
+    }
+    else
+    {
+        std::vector<std::pair<AreaLocalID,AreaLocalID>> area_to_area_list;
+        std::vector<int> weightSum_list;
+        for(auto keyValue = areaIDConnecStrengthMapLocal.begin();
+            keyValue != areaIDConnecStrengthMapLocal.end();
+            ++keyValue)
+        {
+            area_to_area_list.push_back(keyValue->first);
+            weightSum_list.push_back(keyValue->second);
+        }
+        int size = area_to_area_list.size();
+        MPIWrapper::Send(&size,1,MPI_INT,resultToRank,4);
+        int nbrBytes = size*sizeof(std::pair<AreaLocalID,AreaLocalID>);
+        MPIWrapper::Send(area_to_area_list.data(),nbrBytes,MPI_BYTE,resultToRank,5);
+        MPIWrapper::Send(weightSum_list.data(),size,MPI_INT,resultToRank,6);
+    }
+    
+    //Transfer data from ID to string
+    auto result = std::make_unique<AreaConnecMap>();;
+    if(my_rank==resultToRank)
+    {
+        for(auto keyValue = areaIDConnecStrengthMapLocal.begin();
+            keyValue != areaIDConnecStrengthMapLocal.end();
+            ++keyValue)
+        {
+            AreaLocalID source_area_ID = keyValue->first.first;
+            AreaLocalID target_area_ID = keyValue->first.second;
+            std::string source_area_name = areaID_to_name[source_area_ID];
+            std::string target_area_name = areaID_to_name[target_area_ID];
+            (*result)[{source_area_name,target_area_name}]+=keyValue->second;
+        }        
     }
     
     return std::move(result);

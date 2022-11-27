@@ -29,7 +29,7 @@ public:
         {
             return hash(p.first) ^  hash(p.second);
         }
-    };
+    };    
     using AreaConnecMap = std::unordered_map<std::pair<std::string,std::string>,int,stdPair_hash>;
     using AreaLocalID = std::pair<std::uint64_t,std::uint64_t>;
     using AreaIDConnecMap = std::unordered_map<std::pair<AreaLocalID,AreaLocalID>,int,stdDoublePair_hash>;

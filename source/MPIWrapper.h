@@ -382,4 +382,20 @@ public:
 			throw error_code;
 		}
 	}
+
+	static void Recv(void* buffer,int count,MPI_Datatype datatype,int source,int tag){
+		MPI_Status* status;
+		if(const int error_code = MPI_Recv(buffer,count,datatype,source,tag,MPI_COMM_WORLD,status); error_code != 0){
+			std::cout << "Recv returned the error: " << error_code << std::endl;
+			std::cout << "Source "<<status->MPI_SOURCE<<" returned the error: " << status->MPI_ERROR << std::endl;
+			throw error_code;
+		}
+	}
+	
+	static void Send(void* buffer,int count,MPI_Datatype datatype,int dest,int tag){
+		if(const int error_code = MPI_Send(buffer,count,datatype,dest,tag,MPI_COMM_WORLD); error_code != 0){
+			std::cout << "Send returned the error: " << error_code << std::endl;
+			throw error_code;
+		}
+	}
 };
