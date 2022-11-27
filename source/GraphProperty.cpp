@@ -128,7 +128,7 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
             
             // Non existend key has the value 0 because of value initialization
             // https://en.cppreference.com/w/cpp/container/unordered_map/operator_at
-            //areaIDConnecStrengthMapLocal[area_to_area]+=oEdge.weight;
+            areaIDConnecStrengthMapLocal[area_to_area]+=oEdge.weight;
         }
     }
 
