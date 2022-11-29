@@ -3,6 +3,8 @@
 #include "DistributedGraph.h"
 #include "MPIWrapper.h"
 #include <numeric>
+#include <unordered_map>
+#include <cassert>  // debug
 
 class GraphProperty {
 public:
@@ -34,4 +36,5 @@ public:
     using AreaLocalID = std::pair<std::uint64_t,std::uint64_t>;
     using AreaIDConnecMap = std::unordered_map<std::pair<AreaLocalID,AreaLocalID>,int,stdDoublePair_hash>;
     static std::unique_ptr<AreaConnecMap> areaConnectivityStrength(const DistributedGraph& graph,int resultToRank=0);
+    static std::unique_ptr<AreaConnecMap> areaConnectivityStrengthSingleProc(const DistributedGraph& graph,int resultToRank=0);
 };

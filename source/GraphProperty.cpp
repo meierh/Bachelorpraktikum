@@ -244,3 +244,107 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     
     return std::move(result);
 }
+
+
+
+std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStrengthSingleProc
+(
+    const DistributedGraph& graph,
+    int resultToRank
+)
+{
+    const int my_rank = MPIWrapper::get_my_rank();
+    std::vector<uint64_t> node_numbers = MPIWrapper::all_gather(graph.get_number_local_nodes());
+
+    ////////////////////////////////////////////// TAKEN FROM ABOVE //////////////////////////////////////////////
+    //Gathering of area local ind and strings for the main process
+    std::unordered_map<AreaLocalID,std::string,stdPair_hash> areaID_to_name;
+    std::vector<int> area_names_char_dist;
+    const std::vector<std::string> area_names = graph.get_area_names();
+    for(const std::string& name : area_names)
+    {
+        area_names_char_dist.push_back(name.size());
+    }
+    int area_names_totalLength = std::accumulate(area_names_char_dist.begin(),area_names_char_dist.end(),0);
+    auto transmit_area_names = std::make_unique<char[]>(area_names_totalLength);
+    if(my_rank==resultToRank)
+    {
+        for(int otherRank=0; otherRank<MPIWrapper::get_number_ranks(); otherRank++)
+        {
+            if(otherRank==resultToRank)
+                continue;
+            
+            int nbr_of_area_names;
+            MPIWrapper::Recv(&nbr_of_area_names,1,MPI_INT,otherRank,0);
+            std::vector<int> area_names_char_dist_other(nbr_of_area_names);
+            MPIWrapper::Recv(area_names_char_dist_other.data(),nbr_of_area_names,MPI_INT,otherRank,1);
+            int area_names_totalLength_other = std::accumulate(area_names_char_dist.begin(),area_names_char_dist.end(),0);
+            auto transmit_area_names_other = std::make_unique<char[]>(area_names_totalLength_other);
+            MPIWrapper::Recv(transmit_area_names_other.get(),area_names_totalLength_other,MPI_CHAR,otherRank,3);
+            std::vector<std::string> area_names_other(nbr_of_area_names);
+            int pChar=0;
+            for(int i=0;i<area_names_other.size();i++)
+            {
+                area_names_other[i] = std::string(transmit_area_names_other.get()+pChar,area_names_char_dist_other[i]);
+                pChar+=area_names_char_dist_other[i];
+            }
+            for(int i=0;i<area_names_other.size();i++)
+            {
+                areaID_to_name.insert({{otherRank,i},area_names_other[i]});
+            }
+        }
+        for(int i=0;i<area_names.size();i++)
+        {
+            areaID_to_name.insert({{my_rank,i},area_names[i]});
+        }
+    }
+    else
+    {
+        int size = area_names_char_dist.size();
+        MPIWrapper::Send(&size,1,MPI_INT,resultToRank,0);
+        MPIWrapper::Send(area_names_char_dist.data(),area_names_char_dist.size(),MPI_INT,resultToRank,1);
+        MPIWrapper::Send(transmit_area_names.get(),area_names_totalLength,MPI_CHAR,resultToRank,3);
+    }
+    ////////////////////////////////////////////// TAKEN FROM ABOVE //////////////////////////////////////////////
+
+    // Computation is performed by a single process:
+    if(my_rank == 0)
+    {
+        const int& number_ranks = MPIWrapper::get_number_ranks();
+        assert(node_numbers.size() == number_ranks);    // debug
+
+        auto result = std::make_unique<AreaConnecMap>();
+        
+        // Iterate over each rank...
+        for(int r = 0; r < number_ranks; r++)
+        {
+            // ...and over each node from that rank
+            for(int n = 0; n < node_numbers[r]; n++)
+            {
+                // Consider each outgoing edge and find out source and target areas
+                const auto source_area_id = graph.get_node_area_localID(r, n);
+                const std::vector<OutEdge>& oEdges = graph.get_out_edges(r, n);
+                for(const OutEdge& oEdge : oEdges)
+                {
+                    std::uint64_t source_area_localID = graph.get_node_area_localID(r, n);
+                    std::uint64_t target_area_localID = graph.get_node_area_localID(oEdge.target_rank, oEdge.target_id);
+                    
+                    AreaLocalID sourceArea = std::pair<uint64_t, uint64_t>(r, source_area_localID);
+                    AreaLocalID targetArea = std::pair<uint64_t, uint64_t>(oEdge.target_rank, target_area_localID);
+                    
+                    std::string source_area_str = areaID_to_name[sourceArea];
+                    std::string target_area_str = areaID_to_name[targetArea];
+
+                    // Store all weights of the area pairs that realize a connection of two different areas 
+                    // in the corresponding "area to area hash class" of the result map
+                    if(source_area_str != target_area_str)
+                    {
+                        (*result)[{source_area_str, target_area_str}] += oEdge.weight;
+                    }
+                }   
+            }
+        }
+        return std::move(result);
+    }
+    // ?
+}
