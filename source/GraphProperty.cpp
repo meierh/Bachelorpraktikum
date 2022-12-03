@@ -307,14 +307,13 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     }
     ////////////////////////////////////////////// TAKEN FROM ABOVE //////////////////////////////////////////////
 
+    auto result = std::make_unique<AreaConnecMap>();
     // Computation is performed by a single process:
     if(my_rank == 0)
     {
         const int& number_ranks = MPIWrapper::get_number_ranks();
         assert(node_numbers.size() == number_ranks);    // debug
 
-        auto result = std::make_unique<AreaConnecMap>();
-        
         // Iterate over each rank...
         for(int r = 0; r < number_ranks; r++)
         {
@@ -344,7 +343,6 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
                 }   
             }
         }
-        return std::move(result);
     }
-    // ?
+    return std::move(result);
 }
