@@ -13,35 +13,26 @@
 DistributedGraph::DistributedGraph(const std::filesystem::path& path) {
 	const auto my_rank = MPIWrapper::get_my_rank();
 
-<<<<<<< HEAD
-	const auto& rank_prefix = std::string("rank_") + std::to_string(my_rank); // my_rank must be three digits?
-	const auto& positions_file = rank_prefix + "_positions.txt";
-	const auto& in_edges_file = rank_prefix + "_in_edges.txt"; // new format: "_in_network.txt"
-	const auto& out_edges_file = rank_prefix + "_out_edges.txt"; // new format: "_out_network.txt"
-=======
-	// const auto& rank_prefix = std::string("rank_") + std::to_string(my_rank);
-
-	int number_of_digits_ranks = to_string(MPIWrapper::get_number_ranks() - 1).length();
-	int number_of_digits_my_rank = to_string(my_rank).length();
+	int number_of_digits_ranks = std::to_string(MPIWrapper::get_number_ranks() - 1).length();
+	int number_of_digits_my_rank = std::to_string(my_rank).length();
 
   	// zeros = number_of_ranks - rank (Stellen)
   	int number_of_zeros = number_of_digits_ranks - number_of_digits_my_rank;
-  	string zeros = "";
+  	std::string zeros = "";
 	// append number of zeros needed
   	while (number_of_zeros != 0) {
     	zeros = zeros + "0";
 		number_of_zeros--;
   	}
 
-	const string& rank_prefix = std::string("rank_") + zeros + std::to_string(my_rank);
+	const std::string& rank_prefix = std::string("rank_") + zeros + std::to_string(my_rank);
 
 	const auto& positions_file = rank_prefix + "_positions.txt";
 	const auto& in_network_file = rank_prefix + "_in_network.txt";
 	const auto& out_network_file = rank_prefix + "_out_network.txt";
 
-	const string& network_string = "network";
-	const string& positions_string = "positions";
->>>>>>> 6a71abfeb431129c079b1640a14b6c14fcc8ea7f
+	const std::string& network_string = "network";
+	const std::string& positions_string = "positions";
 
 	const auto& positions = path / positions_string / positions_file;
 	const auto& in_network = path / network_string / in_network_file;
