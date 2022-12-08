@@ -10,8 +10,8 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
     int ownRankRecvInd;
 
-    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
-    fflush(stdout);
+    //std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
+    //fflush(stdout);
 
     //prepare buffer for areaID data from other ranks
     std::unordered_map<int,std::pair<int,int>> treated_ranks_to_pair_ind_size_recv;
@@ -19,8 +19,7 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     std::vector<std::unordered_map<std::uint64_t,int>> rank_ind_NodeID_to_localInd;
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
     {
-        std::cout<<"Rank:"<<my_rank<<" node_local_ind:" <<node_local_ind<<"/"<<number_local_nodes << '\n';
-        fflush(stdout);
+
         const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank,node_local_ind);
         for(const OutEdge& oEdge : oEdges)
         {
@@ -48,15 +47,12 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
             treated_ranks_to_pair_ind_size_recv[oEdge.target_rank].second++;
         }
     }
-
-    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
-    fflush(stdout);
-    MPIWrapper::barrier();
     
     std::vector<std::vector<std::uint64_t>> rank_ind_to_area_ind_list_recv(ranks_recv.size());
     for(int i=0; i<ranks_recv.size(); i++)
     {
         int rank = ranks_recv[i];
+        assert(treated_ranks_to_pair_ind_size_recv.find(rank)!=treated_ranks_to_pair_ind_size_recv.end());
         rank_ind_to_area_ind_list_recv[i].resize(treated_ranks_to_pair_ind_size_recv[rank].second);
     }
     
@@ -65,7 +61,9 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     for(int i=0; i<ranks_recv.size(); i++)
     {
         int source_rank = ranks_recv[i];
+        assert(treated_ranks_to_pair_ind_size_recv.find(source_rank)!=treated_ranks_to_pair_ind_size_recv.end());
         int ind = treated_ranks_to_pair_ind_size_recv[source_rank].first;
+        assert(ind<rank_ind_to_area_ind_list_recv.size() && ind>=0);
         if(source_rank == my_rank)
         {
             ownRankRecvInd = ind;
@@ -74,9 +72,14 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
         int count = treated_ranks_to_pair_ind_size_recv[source_rank].second;
         std::uint64_t* buffer = rank_ind_to_area_ind_list_recv[ind].data();
         int tag = stoi(std::to_string(source_rank)+std::to_string(my_rank));
-        MPI_Request *request = requestArrayRecv.get() + i;
+        MPI_Request *request = requestArrayRecv.get() + i;        
+        assert(count == rank_ind_to_area_ind_list_recv[ind].size());
         MPIWrapper::Irecv(buffer,count,MPI_UINT64_T,source_rank,tag,request);
     }
+    
+    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
+    fflush(stdout);
+    MPIWrapper::barrier();
     
     //prepare areaID data to send to other ranks
     std::unordered_map<int,int> treated_ranks_send;
@@ -91,6 +94,7 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
             const auto rank_ind = treated_ranks_send.find(iEdge.source_rank);
             if(rank_ind != treated_ranks_send.end())
             {
+                assert(rank_ind->second<rank_ind_to_area_ind_list_send.size() && rank_ind->second>=0);
                 rank_ind_to_area_ind_list_send[rank_ind->second].push_back(area_localID);
             }
             else
@@ -101,6 +105,11 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
             }
         }
     }
+
+    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
+    fflush(stdout);
+    MPIWrapper::barrier();
+    throw 1; 
     
     //setup nonblocking send for areaID data to other ranks
     std::unique_ptr<MPI_Request[]> requestArraySend(new MPI_Request[ranks_recv.size()]);
@@ -108,6 +117,7 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     {
         int target_rank = ranks_send[i];
         int ind = treated_ranks_send[target_rank];
+        assert(ind<rank_ind_to_area_ind_list_send.size() && ind>=0);
         if(target_rank == my_rank)
         {
             rank_ind_to_area_ind_list_recv[ownRankRecvInd] = rank_ind_to_area_ind_list_send[ind];
