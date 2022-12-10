@@ -270,4 +270,18 @@ public:
 
 		return total_value;
 	}
+	
+	static void passive_rget(void *origin_addr, int origin_count, MPI_Datatype origin_datatype, int target_rank,
+							 MPI_Aint target_disp, int target_count, MPI_Datatype datatype, MPI_Win win){
+		MPI_Request request_item{};
+		lock_window_shared(target_rank,win);
+		if(const auto error_code = MPI_Rget(origin_addr,origin_count,origin_datatype,target_rank,target_disp,
+											target_count,datatype, win, &request_item);
+			error_code!=MPI_SUCCESS){
+			std::cout << "Fetching a remote value returned the error code: " << error_code << std::endl;
+			throw error_code;
+		}
+		MPI_Wait(&request_item, MPI_STATUS_IGNORE);
+		unlock_window(target_rank,win);
+	}
 };
