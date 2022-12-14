@@ -33,14 +33,22 @@ void calculate_metrics(std::filesystem::path input_directory) {
 	MPIWrapper::barrier();
 
 	const auto number_total_nodes = NodeCounter::count_nodes(dg);
+	std::cout<<"1"<<std::endl;
+	MPIWrapper::barrier();
 
 	const auto number_total_in_edges = InEdgeCounter::count_in_edges(dg);
 	const auto number_total_out_edges = OutEdgeCounter::count_out_edges(dg);
+	std::cout<<"2"<<std::endl;
+	MPIWrapper::barrier();
 
 	const auto [min_in, max_in] = InDegreeCounter::count_in_degrees(dg);
 	const auto [min_out, max_out] = OutDegreeCounter::count_out_degrees(dg);
+	std::cout<<"3"<<std::endl;
+	MPIWrapper::barrier();
 
 	const auto average_edge_length = EdgeLength::compute_edge_length(dg);
+	std::cout<<"4"<<std::endl;
+	MPIWrapper::barrier();
 
 	//const auto [average_shortest_path, global_efficiency, number_unreachables] = AllPairsShortestPath::compute_apsp(dg);
 
@@ -156,6 +164,38 @@ void calculate_metrics(std::filesystem::path input_directory) {
 	}
 }
 
+void testEdgeGetter(std::filesystem::path input_directory) {
+	const auto my_rank = MPIWrapper::get_my_rank();
+
+	DistributedGraph dg(input_directory);
+
+	MPIWrapper::barrier();
+
+	if (0 == my_rank) {
+		std::cout << "All " << MPIWrapper::get_number_ranks() << " ranks finished loading their local data!" << '\n';
+		fflush(stdout);
+	}
+	int test_rank = 6;
+	int test_node = 13;
+	
+	MPIWrapper::barrier();
+	const Vec3d pos_In = dg.get_node_position(test_rank,test_node);
+	std::cout << "Rank " << my_rank << " found "<< pos_In <<" in edges in rank "<< test_rank <<'\n';
+	MPIWrapper::barrier();
+	const auto in = dg.get_number_in_edges(test_rank,test_node);
+	std::cout << "Rank " << my_rank << " found "<< in <<" in edges in rank "<< test_rank <<'\n';
+	MPIWrapper::barrier();
+	const auto out = dg.get_number_out_edges(test_rank,test_node);
+	std::cout << "Rank " << my_rank << " found "<< out <<" out edges in rank "<< test_rank <<'\n';
+	MPIWrapper::barrier();
+	const auto inE = dg.get_in_edge(test_rank,test_node,0);
+	std::cout << "Rank " << my_rank << " found "<< inE.source_rank<<" "<<inE.source_id<<" "<<inE.weight <<" in edge in rank "<< test_rank <<'\n';
+	MPIWrapper::barrier();
+	const auto outE = dg.get_out_edge(test_rank,test_node,2);
+	std::cout << "Rank " << my_rank << " found "<< outE.target_rank<<" "<<outE.target_id<<" "<<outE.weight <<" out edge in rank "<< test_rank <<'\n';
+	MPIWrapper::barrier();
+}
+
 int main(int argument_count, char* arguments[]) {
 	CLI::App app{ "" };
 
@@ -167,7 +207,7 @@ int main(int argument_count, char* arguments[]) {
 
 	MPIWrapper::init(argument_count, arguments);
 
-	calculate_metrics(input_directory);
+	testEdgeGetter(input_directory);
 
 	MPIWrapper::finalize();
 

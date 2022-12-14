@@ -14,7 +14,9 @@ class EdgeLength {
 		const auto my_rank = MPIWrapper::get_my_rank();
 	
 		auto accumulated_distance = 0.0;
+		std::cout<<"Get node"<<std::endl;
 		const auto& node_position = graph.get_node_position(my_rank, node_id);
+		std::cout<<"Get edge"<<std::endl;
 		const auto& out_edges = graph.get_out_edges(my_rank, node_id);
 
 		for (const auto& [target_rank, target_id, weight] : out_edges) {
