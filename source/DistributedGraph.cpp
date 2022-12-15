@@ -18,40 +18,24 @@ DistributedGraph::DistributedGraph(const std::filesystem::path& path) {
 
   	// zeros = number_of_ranks - rank (check for possible negativ number ?)
   	int number_of_zeros = number_of_digits_ranks - number_of_digits_my_rank;
-<<<<<<< HEAD
   	std::string zeros (number_of_zeros, '0');
 	
 	// build the rank prefix for the files
 	const std::string rank_prefix = std::string("rank_") + zeros + std::to_string(my_rank);
-=======
-  	std::string zeros = "";
-	// append number of zeros needed
-  	while (number_of_zeros != 0) {
-    	zeros = zeros + "0";
-		number_of_zeros--;
-  	}
-
-	const std::string& rank_prefix = std::string("rank_") + zeros + std::to_string(my_rank);
->>>>>>> 5febb2de74e61264236d2ffd011373c8f4198c8e
 
 	// build the strings for the files
-	const auto& positions_file = rank_prefix + "_positions.txt";
-	const auto& in_network_file = rank_prefix + "_in_network.txt";
-	const auto& out_network_file = rank_prefix + "_out_network.txt";
+	const std::string positions_file = rank_prefix + "_positions.txt";
+	const std::string in_network_file = rank_prefix + "_in_network.txt";
+	const std::string out_network_file = rank_prefix + "_out_network.txt";
 
-<<<<<<< HEAD
 	// strings for the directory structure (navigate into the right directories)
 	const std::string network_string = "network";
 	const std::string positions_string = "positions";
-=======
-	const std::string& network_string = "network";
-	const std::string& positions_string = "positions";
->>>>>>> 5febb2de74e61264236d2ffd011373c8f4198c8e
 
 	// build the new paths for files
-	const auto& positions = path / positions_string / positions_file;
-	const auto& in_network = path / network_string / in_network_file;
-	const auto& out_network = path / network_string / out_network_file;
+	const std::filesystem::path positions = path / positions_string / positions_file;
+	const std::filesystem::path in_network = path / network_string / in_network_file;
+	const std::filesystem::path out_network = path / network_string / out_network_file;
 
 	if (!std::filesystem::exists(positions)) {
 		std::cout << "The positions for rank " << my_rank << " do not exist:\n" << positions << std::endl;
