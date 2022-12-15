@@ -18,24 +18,23 @@ DistributedGraph::DistributedGraph(const std::filesystem::path& path) {
 	int number_of_digits_ranks = to_string(MPIWrapper::get_number_ranks() - 1).length();
 	int number_of_digits_my_rank = to_string(my_rank).length();
 
-  	// zeros = number_of_ranks - rank (Stellen)
+  	// zeros = number_of_ranks - rank (check for possible negativ number ?)
   	int number_of_zeros = number_of_digits_ranks - number_of_digits_my_rank;
-  	string zeros = "";
-	// append number of zeros needed
-  	while (number_of_zeros != 0) {
-    	zeros = zeros + "0";
-		number_of_zeros--;
-  	}
+  	std::string zeros (number_of_zeros, '0');
+	
+	// build the rank prefix for the files
+	const std::string rank_prefix = std::string("rank_") + zeros + std::to_string(my_rank);
 
-	const string& rank_prefix = std::string("rank_") + zeros + std::to_string(my_rank);
-
+	// build the strings for the files
 	const auto& positions_file = rank_prefix + "_positions.txt";
 	const auto& in_network_file = rank_prefix + "_in_network.txt";
 	const auto& out_network_file = rank_prefix + "_out_network.txt";
 
-	const string& network_string = "network";
-	const string& positions_string = "positions";
+	// strings for the directory structure (navigate into the right directories)
+	const std::string network_string = "network";
+	const std::string positions_string = "positions";
 
+	// build the new paths for files
 	const auto& positions = path / positions_string / positions_file;
 	const auto& in_network = path / network_string / in_network_file;
 	const auto& out_network = path / network_string / out_network_file;
