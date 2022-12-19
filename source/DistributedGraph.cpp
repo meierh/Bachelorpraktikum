@@ -36,11 +36,11 @@ DistributedGraph::DistributedGraph(const std::filesystem::path& path) {
 		std::cout << "The out edges for rank " << my_rank << " do not exist:\n" << out_edges << std::endl;
 		throw 3;
 	}
-
+	
 	load_nodes(positions);
 	load_in_edges(in_edges);
 	load_out_edges(out_edges);
-
+	
 	in_edge_cache.init();
 	out_edge_cache.init();
 }
@@ -146,11 +146,13 @@ void DistributedGraph::load_nodes(const std::filesystem::path& path) {
 		}
 	}
 
+	MPIWrapper::barrier();
+	
 	nodes_window = MPIWrapper::create_rma_window<Vec3d>(positions.size());
 	local_number_nodes = positions.size();
 	
-	area_names_ind_window = MPIWrapper::create_rma_window<std::uint64_t>(area_names.size());
-	signal_types_ind_window = MPIWrapper::create_rma_window<std::uint64_t>(signal_types.size());
+	area_names_ind_window = MPIWrapper::create_rma_window<std::uint64_t>(area_names_ind.size());
+	signal_types_ind_window = MPIWrapper::create_rma_window<std::uint64_t>(signal_types_ind.size());
 
 	const auto my_rank = MPIWrapper::get_my_rank();
 
@@ -326,7 +328,7 @@ void DistributedGraph::load_out_edges(const std::filesystem::path& path) {
 		number_out_edges[source_id] = out_edges.size();
 
 		if (source_id > 0) {
-			prefix_number_out_edges[source_id] = prefix_number_out_edges[source_id - 1] + +all_out_edges[source_id - 1].size();
+			prefix_number_out_edges[source_id] = prefix_number_out_edges[source_id - 1] + all_out_edges[source_id - 1].size(); //Removed double ++ before all_out_edges[source_id - 1].size()
 		}
 	}
 	MPIWrapper::unlock_window(my_rank, out_edges_window.window);

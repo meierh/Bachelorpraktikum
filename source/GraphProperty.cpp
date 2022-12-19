@@ -9,13 +9,18 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     const int my_rank = MPIWrapper::get_my_rank();
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
     int ownRankRecvInd;
-    
+
+    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
+    fflush(stdout);
+
     //prepare buffer for areaID data from other ranks
     std::unordered_map<int,std::pair<int,int>> treated_ranks_to_pair_ind_size_recv;
     std::vector<int> ranks_recv;
     std::vector<std::unordered_map<std::uint64_t,int>> rank_ind_NodeID_to_localInd;
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
     {
+        std::cout<<"Rank:"<<my_rank<<" node_local_ind:" <<node_local_ind<<"/"<<number_local_nodes << '\n';
+        fflush(stdout);
         const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank,node_local_ind);
         for(const OutEdge& oEdge : oEdges)
         {
@@ -43,6 +48,11 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
             treated_ranks_to_pair_ind_size_recv[oEdge.target_rank].second++;
         }
     }
+
+    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
+    fflush(stdout);
+    MPIWrapper::barrier();
+    
     std::vector<std::vector<std::uint64_t>> rank_ind_to_area_ind_list_recv(ranks_recv.size());
     for(int i=0; i<ranks_recv.size(); i++)
     {
