@@ -8,132 +8,14 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
 {
     const int my_rank = MPIWrapper::get_my_rank();
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
-    int ownRankRecvInd;
 
-    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
-    fflush(stdout);
-    throw 1;
-
-    //prepare buffer for areaID data from other ranks
-    std::unordered_map<int,std::pair<int,int>> treated_ranks_to_pair_ind_size_recv;
-    std::vector<int> ranks_recv;
-    std::vector<std::unordered_map<std::uint64_t,int>> rank_ind_NodeID_to_localInd;
-    for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
-    {
-
-        const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank,node_local_ind);
-        for(const OutEdge& oEdge : oEdges)
-        {
-            const auto rank_ind = treated_ranks_to_pair_ind_size_recv.find(oEdge.target_rank);
-            if(rank_ind != treated_ranks_to_pair_ind_size_recv.end())
-            {
-                rank_ind_NodeID_to_localInd[rank_ind->second.first].insert
-                (
-                    std::pair<std::uint64_t,int>
-                    (
-                        node_local_ind,
-                        treated_ranks_to_pair_ind_size_recv[oEdge.target_rank].second
-                    )
-                );
-            }
-            else
-            {
-                treated_ranks_to_pair_ind_size_recv.insert
-                (
-                    std::pair<int,std::pair<int,int>>(oEdge.target_rank,{ranks_recv.size(),0})
-                );
-                ranks_recv.push_back(oEdge.target_rank);
-                rank_ind_NodeID_to_localInd.push_back({{node_local_ind,0}});
-            }
-            treated_ranks_to_pair_ind_size_recv[oEdge.target_rank].second++;
-        }
-    }
+    std::function<std::uint64_t(int,int)> date_get_function = std::bind(
+        &DistributedGraph::get_node_area_localID, graph,std::placeholders::_1, std::placeholders::_2);
+    auto collected_data = collectAlongEdges_InToOut<std::uint64_t>(
+        graph,MPI_UINT64_T,date_get_function);
     
-    std::vector<std::vector<std::uint64_t>> rank_ind_to_area_ind_list_recv(ranks_recv.size());
-    for(int i=0; i<ranks_recv.size(); i++)
-    {
-        int rank = ranks_recv[i];
-        assert(treated_ranks_to_pair_ind_size_recv.find(rank)!=treated_ranks_to_pair_ind_size_recv.end());
-        rank_ind_to_area_ind_list_recv[i].resize(treated_ranks_to_pair_ind_size_recv[rank].second);
-    }
-    
-    //setup nonblocking recv for areaID data from other ranks
-    std::unique_ptr<MPI_Request[]> requestArrayRecv(new MPI_Request[ranks_recv.size()]);
-    for(int i=0; i<ranks_recv.size(); i++)
-    {
-        int source_rank = ranks_recv[i];
-        assert(treated_ranks_to_pair_ind_size_recv.find(source_rank)!=treated_ranks_to_pair_ind_size_recv.end());
-        int ind = treated_ranks_to_pair_ind_size_recv[source_rank].first;
-        assert(ind<rank_ind_to_area_ind_list_recv.size() && ind>=0);
-        if(source_rank == my_rank)
-        {
-            ownRankRecvInd = ind;
-            continue;
-        }
-        int count = treated_ranks_to_pair_ind_size_recv[source_rank].second;
-        std::uint64_t* buffer = rank_ind_to_area_ind_list_recv[ind].data();
-        int tag = stoi(std::to_string(source_rank)+std::to_string(my_rank));
-        MPI_Request *request = requestArrayRecv.get() + i;        
-        assert(count == rank_ind_to_area_ind_list_recv[ind].size());
-        MPIWrapper::Irecv(buffer,count,MPI_UINT64_T,source_rank,tag,request);
-    }
-    
-    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
-    fflush(stdout);
-    MPIWrapper::barrier();
-    
-    //prepare areaID data to send to other ranks
-    std::unordered_map<int,int> treated_ranks_send;
-    std::vector<std::vector<std::uint64_t>> rank_ind_to_area_ind_list_send;
-    std::vector<int> ranks_send;
-    for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
-    {
-        const std::vector<InEdge>& iEdges = graph.get_in_edges(my_rank,node_local_ind);
-        const std::uint64_t area_localID = graph.get_node_area_localID(my_rank,node_local_ind);
-        for(const InEdge& iEdge : iEdges)
-        {
-            const auto rank_ind = treated_ranks_send.find(iEdge.source_rank);
-            if(rank_ind != treated_ranks_send.end())
-            {
-                assert(rank_ind->second<rank_ind_to_area_ind_list_send.size() && rank_ind->second>=0);
-                rank_ind_to_area_ind_list_send[rank_ind->second].push_back(area_localID);
-            }
-            else
-            {     
-                treated_ranks_send.insert(std::pair<int,int>(iEdge.source_rank,ranks_send.size()));
-                rank_ind_to_area_ind_list_send.push_back({area_localID});
-                ranks_send.push_back(iEdge.source_rank);
-            }
-        }
-    }
-
-    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
-    fflush(stdout);
-    MPIWrapper::barrier();
-    throw 1; 
-    
-    //setup nonblocking send for areaID data to other ranks
-    std::unique_ptr<MPI_Request[]> requestArraySend(new MPI_Request[ranks_recv.size()]);
-    for(int i=0; i<ranks_send.size(); i++)
-    {
-        int target_rank = ranks_send[i];
-        int ind = treated_ranks_send[target_rank];
-        assert(ind<rank_ind_to_area_ind_list_send.size() && ind>=0);
-        if(target_rank == my_rank)
-        {
-            rank_ind_to_area_ind_list_recv[ownRankRecvInd] = rank_ind_to_area_ind_list_send[ind];
-            continue;
-        }               
-        int count = rank_ind_to_area_ind_list_send[ind].size();
-        std::uint64_t* buffer = rank_ind_to_area_ind_list_send[ind].data();
-        int tag = stoi(std::to_string(my_rank)+std::to_string(target_rank));
-        MPI_Request *request = requestArraySend.get() + i;
-        MPIWrapper::Isend(buffer,count,MPI_UINT64_T,target_rank,tag,request);
-    }
- 
-    //Wait for send and recv completion
-    MPIWrapper::Waitall(ranks_recv.size(),requestArrayRecv.get());
-    MPIWrapper::Waitall(ranks_send.size(),requestArraySend.get());
+    collectedData_ptr<std::uint64_t> rank_to_databuffer= std::move(collected_data.first);
+    collectedDataStructure_ptr rank_to_NodeID_to_localInd = std::move(collected_data.second); 
     
     //Create rank local area distance sum
     AreaIDConnecMap areaIDConnecStrengthMapLocal;    
@@ -366,4 +248,160 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     return std::move(result);
 }
 
+template<typename DATA>
+static std::pair<GraphProperty::collectedData_ptr<DATA>,GraphProperty::collectedDataStructure_ptr> GraphProperty::collectAlongEdges_InToOut
+(
+    const DistributedGraph& graph,
+    MPI_Datatype datatype,
+    std::function<DATA(int,int)> date_get_function
+)
+{
+    const int my_rank = MPIWrapper::get_my_rank();
+    const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
+    int ownRankRecvInd;
 
+    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
+    fflush(stdout);
+    throw 1;
+
+    
+/* prepare buffer for data to receive from other ranks
+ */
+    /* map: rank to receive from -> (index of rank to receive from in "ranks_recv",
+     *                               number of outEdges ending in the rank to receive from)
+     */ 
+    std::unordered_map<int,std::pair<int,int>> treated_ranks_to_pair_ind_size_recv;
+    // list of ranks to receive from
+    std::vector<int> ranks_recv;
+    /* list analog to ranks_recv - map: node_local_ind -> respective index in  
+     * rank_ind_to_data_ind_list_recv
+     */
+    auto rank_ind_NodeID_to_localInd = std::make_unique<std::vector<std::unordered_map<std::uint64_t,int>>>();
+    
+    for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
+    {
+        const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank,node_local_ind);
+        for(const OutEdge& oEdge : oEdges)
+        {
+            const auto rank_ind = treated_ranks_to_pair_ind_size_recv.find(oEdge.target_rank);
+            if(rank_ind != treated_ranks_to_pair_ind_size_recv.end())
+            {
+                (*rank_ind_NodeID_to_localInd)[rank_ind->second.first].insert
+                (
+                    std::pair<std::uint64_t,int>
+                    (
+                        node_local_ind,
+                        treated_ranks_to_pair_ind_size_recv[oEdge.target_rank].second
+                    )
+                );
+            }
+            else
+            {
+                treated_ranks_to_pair_ind_size_recv.insert
+                (
+                    std::pair<int,std::pair<int,int>>(oEdge.target_rank,{ranks_recv.size(),0})
+                );
+                ranks_recv.push_back(oEdge.target_rank);
+                rank_ind_NodeID_to_localInd->push_back({{node_local_ind,0}});
+            }
+            treated_ranks_to_pair_ind_size_recv[oEdge.target_rank].second++;
+        }
+    }
+    
+    // list analog to recv ranks: list of receive buffer
+    auto rank_ind_to_data_ind_list_recv = std::make_unique<std::vector<std::vector<DATA>>(ranks_recv.size());
+    for(int i=0; i<ranks_recv.size(); i++)
+    {
+        int rank = ranks_recv[i];
+        assert(treated_ranks_to_pair_ind_size_recv.find(rank)!=treated_ranks_to_pair_ind_size_recv.end());
+        (*rank_ind_to_data_ind_list_recv)[i].resize(treated_ranks_to_pair_ind_size_recv[rank].second);
+    }
+    
+/* setup nonblocking recv for areaID data from other ranks
+ */
+    std::unique_ptr<MPI_Request[]> requestArrayRecv(new MPI_Request[ranks_recv.size()]);
+    for(int i=0; i<ranks_recv.size(); i++)
+    {
+        int source_rank = ranks_recv[i];
+        assert(treated_ranks_to_pair_ind_size_recv.find(source_rank)!=treated_ranks_to_pair_ind_size_recv.end());
+        int ind = treated_ranks_to_pair_ind_size_recv[source_rank].first;
+        assert(ind<rank_ind_to_data_ind_list_recv->size() && ind>=0);
+        if(source_rank == my_rank)
+        {
+            ownRankRecvInd = ind;
+            continue;
+        }
+        int count = treated_ranks_to_pair_ind_size_recv[source_rank].second;
+        DATA* buffer = (*rank_ind_to_data_ind_list_recv)[ind].data();
+        int tag = stoi(std::to_string(source_rank)+std::to_string(my_rank));
+        MPI_Request *request = requestArrayRecv.get() + i;        
+        assert(count == (*rank_ind_to_data_ind_list_recv)[ind].size());
+        MPIWrapper::Irecv(buffer,count,datatype,source_rank,tag,request);
+    }
+    
+    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
+    fflush(stdout);
+    MPIWrapper::barrier();
+    
+/* prepare areaID data to send to other ranks
+ */
+    // maps: rand ID -> respective index in ranks_send
+    std::unordered_map<int,int> treated_ranks_send;
+    // list analog to ranks_send: list of send buffers
+    std::vector<std::vector<DATA>> rank_ind_to_data_list_send;
+    // list of ranks to send to
+    std::vector<int> ranks_send;
+    
+    for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
+    {
+        const std::vector<InEdge>& iEdges = graph.get_in_edges(my_rank,node_local_ind);
+        const DATA date = date_get_function(my_rank,node_local_ind);
+        for(const InEdge& iEdge : iEdges)
+        {
+            const auto rank_ind = treated_ranks_send.find(iEdge.source_rank);
+            if(rank_ind != treated_ranks_send.end())
+            {
+                assert(rank_ind->second<rank_ind_to_area_ind_list_send.size() && rank_ind->second>=0);
+                rank_ind_to_area_ind_list_send[rank_ind->second].push_back(area_localID);
+            }
+            else
+            {     
+                treated_ranks_send.insert(std::pair<int,int>(iEdge.source_rank,ranks_send.size()));
+                rank_ind_to_area_ind_list_send.push_back({area_localID});
+                ranks_send.push_back(iEdge.source_rank);
+            }
+        }
+    }
+
+    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
+    fflush(stdout);
+    MPIWrapper::barrier();
+    throw 1; 
+    
+/* setup nonblocking send for areaID data to other ranks
+ */
+    std::unique_ptr<MPI_Request[]> requestArraySend(new MPI_Request[ranks_recv.size()]);
+    for(int i=0; i<ranks_send.size(); i++)
+    {
+        int target_rank = ranks_send[i];
+        int ind = treated_ranks_send[target_rank];
+        assert(ind<rank_ind_to_area_ind_list_send.size() && ind>=0);
+        if(target_rank == my_rank)
+        {
+            (*rank_ind_to_data_ind_list_recv)[ownRankRecvInd] = rank_ind_to_area_ind_list_send[ind];
+            continue;
+        }               
+        int count = rank_ind_to_area_ind_list_send[ind].size();
+        DATA* buffer = rank_ind_to_area_ind_list_send[ind].data();
+        int tag = stoi(std::to_string(my_rank)+std::to_string(target_rank));
+        MPI_Request *request = requestArraySend.get() + i;
+        MPIWrapper::Isend(buffer,count,datatype,target_rank,tag,request);
+    }
+ 
+/* Wait for send and recv completion
+ */
+    MPIWrapper::Waitall(ranks_recv.size(),requestArrayRecv.get());
+    MPIWrapper::Waitall(ranks_send.size(),requestArraySend.get());
+    
+    return std::make_pair(std::move(rank_ind_to_data_ind_list_recv),std::move(rank_ind_NodeID_to_localInd));
+}

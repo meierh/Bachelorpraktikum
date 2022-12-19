@@ -39,4 +39,13 @@ public:
     static std::unique_ptr<AreaConnecMap> areaConnectivityStrengthSingleProc(const DistributedGraph& graph,int resultToRank=0);
     
 private:
+    
+    /* General method for transfering one date of the type DATA from any in edge to any out edge
+     */
+    template<typename DATA>
+    using collectedData_ptr = std::unique_ptr<std::vector<std::vector<DATA>>>;
+    using collectedDataStructure_ptr = std::unique_ptr<std::vector<std::unordered_map<std::uint64_t,int>>>;
+    template<typename DATA>
+    static std::pair<collectedData_ptr<DATA>,collectedDataStructure_ptr> collectAlongEdges_InToOut
+    (const DistributedGraph& graph,MPI_Datatype datatype,std::function<DATA(int,int)> date_get_function);
 };
