@@ -55,7 +55,7 @@ public:
 		auto status_counter = 0;
 		const auto status_step = number_local_nodes / 101.0;
 
-		graph.lock_all_rma_windows();
+		//graph.lock_all_rma_windows(); Remove because of refactor
 
 		auto sum_clustering_coefficient_locally = 0.0;
 
@@ -72,7 +72,7 @@ public:
 
 		MPIWrapper::barrier();
 
-		graph.unlock_all_rma_windows();
+		//graph.unlock_all_rma_windows(); Remove because of refactor
 
 		Status::report_status(number_local_nodes, total_number_nodes, "Clustering Coefficient");
 

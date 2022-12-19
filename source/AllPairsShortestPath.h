@@ -91,7 +91,7 @@ public:
 		auto sum_efficiency_locally = 0.0;
 		auto number_unreachables_locally = std::uint64_t(0);
 
-		graph.lock_all_rma_windows();
+		//graph.lock_all_rma_windows(); Remove because of refactoring
 
 		for (auto node_id = 0U; node_id < number_local_nodes; node_id++) {
 			const auto [sum_shortest_path_from_node, sum_efficiency_from_node, number_unreachables_from_node]
@@ -109,7 +109,7 @@ public:
 
 		MPIWrapper::barrier();
 
-		graph.unlock_all_rma_windows();
+		//graph.unlock_all_rma_windows(); Remove because of refactoring
 
 		Status::report_status(number_local_nodes, total_number_nodes, "APSP");
 

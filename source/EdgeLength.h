@@ -14,9 +14,7 @@ class EdgeLength {
 		const auto my_rank = MPIWrapper::get_my_rank();
 	
 		auto accumulated_distance = 0.0;
-		std::cout<<"Get node"<<std::endl;
 		const auto& node_position = graph.get_node_position(my_rank, node_id);
-		std::cout<<"Get edge"<<std::endl;
 		const auto& out_edges = graph.get_out_edges(my_rank, node_id);
 
 		for (const auto& [target_rank, target_id, weight] : out_edges) {
@@ -37,14 +35,14 @@ public:
 
 		auto accumulated_distance = 0.0;
 
-		graph.lock_all_rma_windows();
+		//graph.lock_all_rma_windows(); Remove because of refactoring
 
 		for (auto node_id = 0; node_id < number_local_nodes; node_id++) {
 			const auto& distance = compute_edge_length(graph, node_id);
 			accumulated_distance += distance;
 		}
 
-		graph.unlock_all_rma_windows();
+		//graph.unlock_all_rma_windows(); Remove because of refactoring
 
 		const auto my_rank = MPIWrapper::get_my_rank();
 		const auto total_distance = MPIWrapper::reduce_sum(accumulated_distance);
