@@ -9,6 +9,8 @@
 #include "EdgeLength.h"
 #include "NodeCounter.h"
 
+#include "GraphProperty.h"
+
 #include <CLI/App.hpp>
 #include <CLI/Config.hpp>
 #include <CLI/Formatter.hpp>
@@ -33,28 +35,20 @@ void calculate_metrics(std::filesystem::path input_directory) {
 	MPIWrapper::barrier();
 
 	const auto number_total_nodes = NodeCounter::count_nodes(dg);
-	MPIWrapper::barrier();
 
 	const auto number_total_in_edges = InEdgeCounter::count_in_edges(dg);
 	const auto number_total_out_edges = OutEdgeCounter::count_out_edges(dg);
-	MPIWrapper::barrier();
 
 	const auto [min_in, max_in] = InDegreeCounter::count_in_degrees(dg);
 	const auto [min_out, max_out] = OutDegreeCounter::count_out_degrees(dg);
-	std::cout<<"3"<<std::endl;
-	MPIWrapper::barrier();
 
 	const auto average_edge_length = EdgeLength::compute_edge_length(dg);
-	std::cout<<"4"<<std::endl;
-	MPIWrapper::barrier();
 
 	const auto [average_shortest_path, global_efficiency, number_unreachables] = AllPairsShortestPath::compute_apsp(dg);
 
 	//const auto average_betweenness_centrality = BetweennessCentrality::compute_average_betweenness_centrality(dg);
 
 	const auto average_cluster_coefficient = Clustering::compuate_average_clustering_coefficient(dg);
-	
-	MPIWrapper::barrier();
 
 	if (my_rank == 0) {
 		std::cout << "The total number of nodes in the graph is: " << number_total_nodes << '\n';
@@ -82,6 +76,7 @@ void testEdgeGetter(std::filesystem::path input_directory) {
 		std::cout << "All " << MPIWrapper::get_number_ranks() << " ranks finished loading their local data!" << '\n';
 		fflush(stdout);
 	}
+
 	int test_rank = 6;
 	int test_node = 13;
 	
@@ -194,6 +189,20 @@ void testEdgeGetter(std::filesystem::path input_directory) {
 	}
 }
 
+void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
+{
+	const auto my_rank = MPIWrapper::get_my_rank();
+	DistributedGraph dg(input_directory);
+	MPIWrapper::barrier();
+
+	const auto number_total_nodes = GraphProperty::areaConnectivityStrength(dg);
+	if (my_rank == 0) 
+	{
+		std::cout << "The total number of nodes in the graph is: " << number_total_nodes << '\n';
+		fflush(stdout);
+	}
+}
+
 int main(int argument_count, char* arguments[]) {
 	CLI::App app{ "" };
 
@@ -205,7 +214,7 @@ int main(int argument_count, char* arguments[]) {
 
 	MPIWrapper::init(argument_count, arguments);
 
-	calculate_metrics(input_directory);
+	test_GraphPropertyAlgorithms(input_directory);
 
 	MPIWrapper::finalize();
 
