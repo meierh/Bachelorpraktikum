@@ -44,7 +44,7 @@ void calculate_metrics(std::filesystem::path input_directory) {
 
 	const auto average_edge_length = EdgeLength::compute_edge_length(dg);
 
-	const auto [average_shortest_path, global_efficiency, number_unreachables] = AllPairsShortestPath::compute_apsp(dg);
+	//const auto [average_shortest_path, global_efficiency, number_unreachables] = AllPairsShortestPath::compute_apsp(dg);
 
 	//const auto average_betweenness_centrality = BetweennessCentrality::compute_average_betweenness_centrality(dg);
 
@@ -57,8 +57,8 @@ void calculate_metrics(std::filesystem::path input_directory) {
 		std::cout << "The minimum in-degree is " << min_in << " and the maximum in-degree is " << max_in << '\n';
 		std::cout << "The minimum out-degree is " << min_out << " and the maximum out-degree is " << max_out << '\n';
 		std::cout << "The average edge length is " << average_edge_length << '\n';
-		std::cout << "The average shortest path is " << average_shortest_path << ", however, " << number_unreachables << " pairs had no path.\n";
-		std::cout << "The global efficiency is " << global_efficiency << ", however, " << number_unreachables << " pairs had no path.\n";
+		//std::cout << "The average shortest path is " << average_shortest_path << ", however, " << number_unreachables << " pairs had no path.\n";
+		//std::cout << "The global efficiency is " << global_efficiency << ", however, " << number_unreachables << " pairs had no path.\n";
 		std::cout << "The average clustering coefficient is: " << average_cluster_coefficient << '\n';
 		//std::cout << "The average betweenness centrality is: " << average_betweenness_centrality << '\n';
 		fflush(stdout);
@@ -195,11 +195,18 @@ void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 	DistributedGraph dg(input_directory);
 	MPIWrapper::barrier();
 
-	const auto number_total_nodes = GraphProperty::areaConnectivityStrength(dg);
-	if (my_rank == 0) 
+	std::unique_ptr<GraphProperty::AreaConnecMap> number_total_nodes;
+	try{
+		number_total_nodes = GraphProperty::areaConnectivityStrength(dg);
+		if (my_rank == 0) 
+		{
+			std::cout << "The total number of nodes in the graph is: " << number_total_nodes << '\n';
+			fflush(stdout);
+		}
+	}
+	catch(int err)
 	{
-		std::cout << "The total number of nodes in the graph is: " << number_total_nodes << '\n';
-		fflush(stdout);
+		std::cout<<"Err:"<<err<<std::endl;
 	}
 }
 

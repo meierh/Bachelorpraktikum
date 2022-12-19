@@ -10,8 +10,9 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
     int ownRankRecvInd;
 
-    //std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
-    //fflush(stdout);
+    std::cout<<"Rank:"<<my_rank<<" Number of nodes is:" << number_local_nodes << '\n';
+    fflush(stdout);
+    throw 1;
 
     //prepare buffer for areaID data from other ranks
     std::unordered_map<int,std::pair<int,int>> treated_ranks_to_pair_ind_size_recv;
@@ -160,7 +161,7 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     //Exchange of area local ind and strings
     std::unordered_map<AreaLocalID,std::string,stdPair_hash> areaID_to_name;
     std::vector<int> area_names_char_dist;
-    const std::vector<std::string> area_names = graph.get_area_names();
+    const std::vector<std::string> area_names = graph.get_local_area_names();
     for(const std::string& name : area_names)
     {
         area_names_char_dist.push_back(name.size());
@@ -265,8 +266,6 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     return std::move(result);
 }
 
-
-
 std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStrengthSingleProc
 (
     const DistributedGraph& graph,
@@ -280,7 +279,7 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     //Gathering of area local ind and strings for the main process
     std::unordered_map<AreaLocalID,std::string,stdPair_hash> areaID_to_name;
     std::vector<int> area_names_char_dist;
-    const std::vector<std::string> area_names = graph.get_area_names();
+    const std::vector<std::string> area_names = graph.get_local_area_names();
     for(const std::string& name : area_names)
     {
         area_names_char_dist.push_back(name.size());
@@ -366,3 +365,5 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     }
     return std::move(result);
 }
+
+
