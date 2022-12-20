@@ -40,12 +40,24 @@ public:
     
 private:
     
+    /* Shortcuts for collectAlongEdges_InToOut method
+     */
+    template<typename DATA>
+    using collectedData_ptr = std::vector<std::vector<DATA>>;
+    using collectedDataStructure_ptr = std::vector<std::unordered_map<std::uint64_t,int>>;
+    using collectedDataIndexes_ptr = std::unordered_map<int,std::pair<int,int>>;
+    
     /* General method for transfering one date of the type DATA from any in edge to any out edge
      */
     template<typename DATA>
-    using collectedData_ptr = std::unique_ptr<std::vector<std::vector<DATA>>>;
-    using collectedDataStructure_ptr = std::unique_ptr<std::vector<std::unordered_map<std::uint64_t,int>>>;
-    template<typename DATA>
-    static std::pair<collectedData_ptr<DATA>,collectedDataStructure_ptr> collectAlongEdges_InToOut
-    (const DistributedGraph& graph,MPI_Datatype datatype,std::function<DATA(int,int)> date_get_function);
+    static std::tuple<
+        std::unique_ptr<collectedData_ptr<DATA>>,
+        std::unique_ptr<collectedDataStructure_ptr>,
+        std::unique_ptr<collectedDataIndexes_ptr>>
+    collectAlongEdges_InToOut
+    (
+        const DistributedGraph& graph,
+        MPI_Datatype datatype,
+        std::function<DATA(int,int)> date_get_function
+    );
 };

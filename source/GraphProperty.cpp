@@ -14,8 +14,9 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     auto collected_data = collectAlongEdges_InToOut<std::uint64_t>(
         graph,MPI_UINT64_T,date_get_function);
     
-    collectedData_ptr<std::uint64_t> rank_to_databuffer= std::move(collected_data.first);
-    collectedDataStructure_ptr rank_to_NodeID_to_localInd = std::move(collected_data.second); 
+    std::unique_ptr<collectedData_ptr<std::uint64_t>> rank_to_databuffer = std::move(std::get<0>(collected_data));
+    std::unique_ptr<collectedDataStructure_ptr> rank_to_NodeID_to_localInd = std::move(std::get<1>(collected_data));
+    std::unique_ptr<collectedDataIndexes_ptr> treated_ranks_to_pair_ind_size_recv = std::move(std::get<2>(collected_data));
     
     //Create rank local area distance sum
     AreaIDConnecMap areaIDConnecStrengthMapLocal;    
@@ -28,10 +29,10 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
             std::uint64_t otherRank = oEdge.target_rank;
             std::uint64_t otherID = oEdge.target_id;
             
-            int rank_local_ind = treated_ranks_to_pair_ind_size_recv[otherRank].first;
-            int nodeID_localInd = rank_ind_NodeID_to_localInd[rank_local_ind][node_local_ind];
+            int rank_local_ind = (*treated_ranks_to_pair_ind_size_recv)[otherRank].first;
+            int nodeID_localInd = (*rank_to_NodeID_to_localInd)[rank_local_ind][node_local_ind];
             
-            AreaLocalID target_area_ID(otherRank,rank_ind_to_area_ind_list_recv[rank_local_ind][nodeID_localInd]);
+            AreaLocalID target_area_ID(otherRank,(*rank_to_databuffer)[rank_local_ind][nodeID_localInd]);
             std::pair<AreaLocalID,AreaLocalID> area_to_area(source_area_ID,target_area_ID);
 
             // Non existend key has the value 0 because of value initialization
@@ -248,8 +249,13 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     return std::move(result);
 }
 
-template<typename DATA>
-static std::pair<GraphProperty::collectedData_ptr<DATA>,GraphProperty::collectedDataStructure_ptr> GraphProperty::collectAlongEdges_InToOut
+template<typename DATA> 
+std::tuple<
+std::unique_ptr<GraphProperty::collectedData_ptr<DATA>>,
+std::unique_ptr<GraphProperty::collectedDataStructure_ptr>,
+std::unique_ptr<GraphProperty::collectedDataIndexes_ptr>
+>
+GraphProperty::collectAlongEdges_InToOut
 (
     const DistributedGraph& graph,
     MPI_Datatype datatype,
@@ -270,51 +276,51 @@ static std::pair<GraphProperty::collectedData_ptr<DATA>,GraphProperty::collected
     /* map: rank to receive from -> (index of rank to receive from in "ranks_recv",
      *                               number of outEdges ending in the rank to receive from)
      */ 
-    std::unordered_map<int,std::pair<int,int>> treated_ranks_to_pair_ind_size_recv;
+    auto treated_ranks_to_pair_ind_size_recv = std::make_unique<collectedDataIndexes_ptr>();
     // list of ranks to receive from
     std::vector<int> ranks_recv;
     /* list analog to ranks_recv - map: node_local_ind -> respective index in  
      * rank_ind_to_data_ind_list_recv
      */
-    auto rank_ind_NodeID_to_localInd = std::make_unique<std::vector<std::unordered_map<std::uint64_t,int>>>();
+    auto rank_ind_NodeID_to_localInd = std::make_unique<collectedDataStructure_ptr>();
     
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
     {
         const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank,node_local_ind);
         for(const OutEdge& oEdge : oEdges)
         {
-            const auto rank_ind = treated_ranks_to_pair_ind_size_recv.find(oEdge.target_rank);
-            if(rank_ind != treated_ranks_to_pair_ind_size_recv.end())
+            const auto rank_ind = treated_ranks_to_pair_ind_size_recv->find(oEdge.target_rank);
+            if(rank_ind != treated_ranks_to_pair_ind_size_recv->end())
             {
                 (*rank_ind_NodeID_to_localInd)[rank_ind->second.first].insert
                 (
                     std::pair<std::uint64_t,int>
                     (
                         node_local_ind,
-                        treated_ranks_to_pair_ind_size_recv[oEdge.target_rank].second
+                        (*treated_ranks_to_pair_ind_size_recv)[oEdge.target_rank].second
                     )
                 );
             }
             else
             {
-                treated_ranks_to_pair_ind_size_recv.insert
+                treated_ranks_to_pair_ind_size_recv->insert
                 (
                     std::pair<int,std::pair<int,int>>(oEdge.target_rank,{ranks_recv.size(),0})
                 );
                 ranks_recv.push_back(oEdge.target_rank);
                 rank_ind_NodeID_to_localInd->push_back({{node_local_ind,0}});
             }
-            treated_ranks_to_pair_ind_size_recv[oEdge.target_rank].second++;
+            (*treated_ranks_to_pair_ind_size_recv)[oEdge.target_rank].second++;
         }
     }
     
     // list analog to recv ranks: list of receive buffer
-    auto rank_ind_to_data_ind_list_recv = std::make_unique<std::vector<std::vector<DATA>>(ranks_recv.size());
+    auto rank_ind_to_data_ind_list_recv = std::make_unique<collectedData_ptr<DATA>>(ranks_recv.size());
     for(int i=0; i<ranks_recv.size(); i++)
     {
         int rank = ranks_recv[i];
-        assert(treated_ranks_to_pair_ind_size_recv.find(rank)!=treated_ranks_to_pair_ind_size_recv.end());
-        (*rank_ind_to_data_ind_list_recv)[i].resize(treated_ranks_to_pair_ind_size_recv[rank].second);
+        assert(treated_ranks_to_pair_ind_size_recv->find(rank)!=treated_ranks_to_pair_ind_size_recv->end());
+        (*rank_ind_to_data_ind_list_recv)[i].resize((*treated_ranks_to_pair_ind_size_recv)[rank].second);
     }
     
 /* setup nonblocking recv for areaID data from other ranks
@@ -323,15 +329,15 @@ static std::pair<GraphProperty::collectedData_ptr<DATA>,GraphProperty::collected
     for(int i=0; i<ranks_recv.size(); i++)
     {
         int source_rank = ranks_recv[i];
-        assert(treated_ranks_to_pair_ind_size_recv.find(source_rank)!=treated_ranks_to_pair_ind_size_recv.end());
-        int ind = treated_ranks_to_pair_ind_size_recv[source_rank].first;
+        assert(treated_ranks_to_pair_ind_size_recv->find(source_rank)!=treated_ranks_to_pair_ind_size_recv->end());
+        int ind = (*treated_ranks_to_pair_ind_size_recv)[source_rank].first;
         assert(ind<rank_ind_to_data_ind_list_recv->size() && ind>=0);
         if(source_rank == my_rank)
         {
             ownRankRecvInd = ind;
             continue;
         }
-        int count = treated_ranks_to_pair_ind_size_recv[source_rank].second;
+        int count = (*treated_ranks_to_pair_ind_size_recv)[source_rank].second;
         DATA* buffer = (*rank_ind_to_data_ind_list_recv)[ind].data();
         int tag = stoi(std::to_string(source_rank)+std::to_string(my_rank));
         MPI_Request *request = requestArrayRecv.get() + i;        
@@ -361,13 +367,13 @@ static std::pair<GraphProperty::collectedData_ptr<DATA>,GraphProperty::collected
             const auto rank_ind = treated_ranks_send.find(iEdge.source_rank);
             if(rank_ind != treated_ranks_send.end())
             {
-                assert(rank_ind->second<rank_ind_to_area_ind_list_send.size() && rank_ind->second>=0);
-                rank_ind_to_area_ind_list_send[rank_ind->second].push_back(area_localID);
+                assert(rank_ind->second<rank_ind_to_data_list_send.size() && rank_ind->second>=0);
+                rank_ind_to_data_list_send[rank_ind->second].push_back(date);
             }
             else
             {     
                 treated_ranks_send.insert(std::pair<int,int>(iEdge.source_rank,ranks_send.size()));
-                rank_ind_to_area_ind_list_send.push_back({area_localID});
+                rank_ind_to_data_list_send.push_back({date});
                 ranks_send.push_back(iEdge.source_rank);
             }
         }
@@ -385,14 +391,14 @@ static std::pair<GraphProperty::collectedData_ptr<DATA>,GraphProperty::collected
     {
         int target_rank = ranks_send[i];
         int ind = treated_ranks_send[target_rank];
-        assert(ind<rank_ind_to_area_ind_list_send.size() && ind>=0);
+        assert(ind<rank_ind_to_data_list_send.size() && ind>=0);
         if(target_rank == my_rank)
         {
-            (*rank_ind_to_data_ind_list_recv)[ownRankRecvInd] = rank_ind_to_area_ind_list_send[ind];
+            (*rank_ind_to_data_ind_list_recv)[ownRankRecvInd] = rank_ind_to_data_list_send[ind];
             continue;
         }               
-        int count = rank_ind_to_area_ind_list_send[ind].size();
-        DATA* buffer = rank_ind_to_area_ind_list_send[ind].data();
+        int count = rank_ind_to_data_list_send[ind].size();
+        DATA* buffer = rank_ind_to_data_list_send[ind].data();
         int tag = stoi(std::to_string(my_rank)+std::to_string(target_rank));
         MPI_Request *request = requestArraySend.get() + i;
         MPIWrapper::Isend(buffer,count,datatype,target_rank,tag,request);
@@ -403,5 +409,14 @@ static std::pair<GraphProperty::collectedData_ptr<DATA>,GraphProperty::collected
     MPIWrapper::Waitall(ranks_recv.size(),requestArrayRecv.get());
     MPIWrapper::Waitall(ranks_send.size(),requestArraySend.get());
     
-    return std::make_pair(std::move(rank_ind_to_data_ind_list_recv),std::move(rank_ind_NodeID_to_localInd));
+    std::unique_ptr<collectedData_ptr<DATA>> a=std::move(rank_ind_to_data_ind_list_recv);
+    std::unique_ptr<collectedDataStructure_ptr> b=std::move(rank_ind_NodeID_to_localInd);
+    std::unique_ptr<collectedDataIndexes_ptr> c=std::move(treated_ranks_to_pair_ind_size_recv);
+    
+    return std::make_tuple
+    (
+        std::move(a),
+        std::move(b),
+        std::move(c)
+    );
 }
