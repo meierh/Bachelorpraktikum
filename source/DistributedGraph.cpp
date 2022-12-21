@@ -74,8 +74,8 @@ void DistributedGraph::load_nodes(const std::filesystem::path& path) {
 	std::string line{};
 
 	std::vector<Vec3d> positions{};
-	std::vector<int> area_names_ind{};
-	std::vector<int> signal_types_ind{};
+	std::vector<std::uint64_t> area_names_ind{};
+	std::vector<std::uint64_t> signal_types_ind{};
 	
 	std::unordered_map<std::string,int> area_names_set;
 	std::unordered_map<std::string,int> signal_types_set;
@@ -146,6 +146,17 @@ void DistributedGraph::load_nodes(const std::filesystem::path& path) {
 		}
 	}
 
+	for(int i=0;i<area_names_ind.size();i++)
+	{
+		if(area_names_ind[i]<0 || area_names_ind[i]>=area_names.size())
+			throw 89;
+	}
+	for(int i=0;i<signal_types_ind.size();i++)
+	{
+		if(signal_types_ind[i]<0 || signal_types_ind[i]>=signal_types.size())
+			throw 79;
+	}
+	
 	MPIWrapper::barrier();
 	
 	nodes_window = MPIWrapper::create_rma_window<Vec3d>(positions.size());
@@ -161,11 +172,11 @@ void DistributedGraph::load_nodes(const std::filesystem::path& path) {
 	MPIWrapper::unlock_window(my_rank, nodes_window.window);
 	
 	MPIWrapper::lock_window_exclusive(my_rank, area_names_ind_window.window);
-	std::memcpy(area_names_ind_window.my_base_pointer, area_names_ind.data(), sizeof(int) * area_names_ind.size());
+	std::memcpy(area_names_ind_window.my_base_pointer, area_names_ind.data(), sizeof(std::uint64_t) * area_names_ind.size());
 	MPIWrapper::unlock_window(my_rank, area_names_ind_window.window);
 	
 	MPIWrapper::lock_window_exclusive(my_rank, signal_types_ind_window.window);
-	std::memcpy(signal_types_ind_window.my_base_pointer, signal_types_ind.data(), sizeof(int) * signal_types_ind.size());
+	std::memcpy(signal_types_ind_window.my_base_pointer, signal_types_ind.data(), sizeof(std::uint64_t) * signal_types_ind.size());
 	MPIWrapper::unlock_window(my_rank, signal_types_ind_window.window);
 }
 

@@ -334,7 +334,25 @@ public:
 	}
 	
 	template<typename T>
-	static void passive_sync_RMA_get(void *dest_addr, int count, int src_disp, int src_rank, MPI_Datatype mpi_datatype, const RMAWindow<T>& rma_window)
+	static T all_reduce(T value,MPI_Datatype datatype,MPI_Op op) {
+		T reduced_global_value(0);
+		if (const auto error_code = MPI_Allreduce(&value,&reduced_global_value,1,datatype,op,MPI_COMM_WORLD); error_code != 0) {
+			std::cout << "All-reducing all values returned the error: " << error_code << std::endl;
+			throw error_code;
+		}
+		return reduced_global_value;
+	}
+	
+	template<typename T>
+	static void reduce(T* src, T* dest,int count,MPI_Datatype datatype,MPI_Op op,int root) {
+		if (const auto error_code = MPI_Reduce(src,dest,count,datatype,op,root,MPI_COMM_WORLD); error_code != 0) {
+			std::cout << "All-reducing all values returned the error: " << error_code << std::endl;
+			throw error_code;
+		}
+	}
+	
+	template<typename T>
+	static void passive_sync_RMA_get(void *dest_addr, int count, int src_disp, int src_rank, MPI_Datatype datatype, const RMAWindow<T>& rma_window)
 	{
 		lock_window_shared(src_rank,rma_window.window);
 		if(src_rank == my_rank)
@@ -347,8 +365,8 @@ public:
 		else
 		{
 			MPI_Request request_item;
-			if(const auto error_code = MPI_Rget(dest_addr,count,mpi_datatype,src_rank,src_disp*sizeof(T),
-												count,mpi_datatype, rma_window.window, &request_item);
+			if(const auto error_code = MPI_Rget(dest_addr,count,datatype,src_rank,src_disp*sizeof(T),
+												count,datatype, rma_window.window, &request_item);
 				error_code!=MPI_SUCCESS){
 					std::cout << "Fetching a remote value returned the error code: " << error_code << std::endl;
 					throw error_code;
@@ -376,9 +394,11 @@ public:
 		MPI_Status array_of_statuses[count];
 		if(const int error_code = MPI_Waitall(count,array_of_requests,array_of_statuses); error_code != 0){
 			std::cout << "Waitall returned the error: " << error_code << std::endl;
+			/*
 			for(int i=0; i<count; i++){
 				std::cout <<"Source "<<array_of_statuses[i].MPI_SOURCE <<" returned the error: " << error_code <<" in Waitall with Tag value "<<array_of_statuses[i].MPI_TAG<< std::endl;
 			}
+			*/
 			throw error_code;
 		}
 	}

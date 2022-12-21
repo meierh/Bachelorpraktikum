@@ -4,6 +4,7 @@
 #include "MPIWrapper.h"
 #include <numeric>
 #include <unordered_map>
+#include <unordered_set>
 #include <cassert>  // debug
 
 class GraphProperty {
@@ -35,10 +36,27 @@ public:
     using AreaConnecMap = std::unordered_map<std::pair<std::string,std::string>,int,stdPair_hash>;
     using AreaLocalID = std::pair<std::uint64_t,std::uint64_t>;
     using AreaIDConnecMap = std::unordered_map<std::pair<AreaLocalID,AreaLocalID>,int,stdDoublePair_hash>;
-    static std::unique_ptr<AreaConnecMap> areaConnectivityStrength(const DistributedGraph& graph,int resultToRank=0);
-    static std::unique_ptr<AreaConnecMap> areaConnectivityStrengthSingleProc(const DistributedGraph& graph,int resultToRank=0);
+    static std::unique_ptr<AreaConnecMap> areaConnectivityStrength(const DistributedGraph& graph,unsigned int resultToRank=0);
+    static std::unique_ptr<AreaConnecMap> areaConnectivityStrengthSingleProc(const DistributedGraph& graph,unsigned int resultToRank=0);
+    
+    /* Histogram for count inside interval greater equal the lower and smaller than the upper bound
+     */
+    using Histogram = std::vector<std::pair<std::pair<double,double>,std::uint64_t>>;
+    static std::unique_ptr<Histogram> edgeLengthHistogramm
+    (
+        const DistributedGraph& graph,
+        double bin_width,
+        unsigned int resultToRank=0
+    );
+    static std::unique_ptr<Histogram> edgeLengthHistogramm
+    (
+        const DistributedGraph& graph,
+        std::uint64_t bin_count,
+        unsigned int resultToRank=0
+    );
     
 private:
+    static inline unsigned int cantorPair(unsigned int k1, unsigned int k2) {return (((k1+k2)*(k1+k2+1))/2)+k2;}    
     
     /* Shortcuts for collectAlongEdges_InToOut method
      */
@@ -59,5 +77,12 @@ private:
         const DistributedGraph& graph,
         MPI_Datatype datatype,
         std::function<DATA(int,int)> date_get_function
+    );
+    
+    static std::unique_ptr<Histogram> edgeLengthHistogramm
+    (
+        const DistributedGraph& graph,
+        std::function<std::unique_ptr<Histogram>(double,double)> histogram_creator,
+        unsigned int resultToRank
     );
 };
