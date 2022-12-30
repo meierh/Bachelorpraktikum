@@ -195,16 +195,20 @@ void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 	DistributedGraph dg(input_directory);
 	MPIWrapper::barrier();
 
-	std::unique_ptr<GraphProperty::AreaConnecMap> number_total_nodes;
+	std::unique_ptr<GraphProperty::AreaConnecMap> areaConnect;
+	std::unique_ptr<GraphProperty::Histogram> histogramCountBins;
+	std::unique_ptr<GraphProperty::Histogram> histogramWidthBins;
 	try{
-		number_total_nodes = GraphProperty::areaConnectivityStrength(dg);
+		areaConnect = GraphProperty::areaConnectivityStrength(dg);
+		histogramCountBins = GraphProperty::edgeLengthHistogramm_constBinCount(dg,50);
+		histogramWidthBins =  GraphProperty::edgeLengthHistogramm_constBinWidth(dg,2.0);
 		if (my_rank == 0) 
 		{
-			std::cout << "The total number of nodes in the graph is: " << number_total_nodes << '\n';
+			std::cout << "The total number of connectivity in the graph is: " << histogramCountBins->size() << '\n';
 			fflush(stdout);
 		}
 	}
-	catch(int err)
+	catch(std::string err)
 	{
 		std::cout<<"Err:"<<err<<std::endl;
 	}

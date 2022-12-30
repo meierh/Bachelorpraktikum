@@ -63,6 +63,10 @@ class MPIWrapper {
 		MPI_Type_contiguous(3,MPI_DOUBLE,&MPI_Vec3d);
 		MPI_Type_commit(&MPI_Vec3d);
 		
+		//MPI Type for MPI_stdPair_of_AreaLocalID 
+		MPI_Type_contiguous(4,MPI_UINT64_T,&MPI_stdPair_of_AreaLocalID);
+		MPI_Type_commit(&MPI_stdPair_of_AreaLocalID);
+		
 		//MPI Type for InEdge
 		InEdge iEdge;
 		int         numberofValuesPerStructElement1[3] = {1,1,1};
@@ -114,6 +118,7 @@ public:
 	inline static MPI_Datatype MPI_Vec3d;
 	inline static MPI_Datatype MPI_InEdge;
 	inline static MPI_Datatype MPI_OutEdge;
+	inline static MPI_Datatype MPI_stdPair_of_AreaLocalID;
 	
 	static void init(int argument_count, char* arguments[]) {
 		if (const auto error_code = MPI_Init(&argument_count, &arguments); error_code != 0) {
@@ -347,6 +352,22 @@ public:
 	static void reduce(T* src, T* dest,int count,MPI_Datatype datatype,MPI_Op op,int root) {
 		if (const auto error_code = MPI_Reduce(src,dest,count,datatype,op,root,MPI_COMM_WORLD); error_code != 0) {
 			std::cout << "All-reducing all values returned the error: " << error_code << std::endl;
+			throw error_code;
+		}
+	}
+	
+	template<typename T>
+	static void gather(T* src, T* dest, int count, MPI_Datatype datatype,int root){
+		if (const auto error_code= MPI_Gather(src,count,datatype,dest,count,datatype,root,MPI_COMM_WORLD);	error_code != 0) {
+			std::cout << "Gathering all values returned the error: " << error_code << std::endl;
+			throw error_code;
+		}
+	}
+	
+	template<typename T>
+	static void gatherv(T* src, int count, T* dest, int* destCounts, int* displs, MPI_Datatype datatype,int root){
+		if (const auto error_code= MPI_Gatherv(src,count,datatype,dest,destCounts,displs,datatype,root,MPI_COMM_WORLD);	error_code != 0) {
+			std::cout << "Gatherving all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
 	}

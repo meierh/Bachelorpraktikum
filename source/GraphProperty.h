@@ -42,13 +42,13 @@ public:
     /* Histogram for count inside interval greater equal the lower and smaller than the upper bound
      */
     using Histogram = std::vector<std::pair<std::pair<double,double>,std::uint64_t>>;
-    static std::unique_ptr<Histogram> edgeLengthHistogramm
+    static std::unique_ptr<Histogram> edgeLengthHistogramm_constBinWidth
     (
         const DistributedGraph& graph,
         double bin_width,
         unsigned int resultToRank=0
     );
-    static std::unique_ptr<Histogram> edgeLengthHistogramm
+    static std::unique_ptr<Histogram> edgeLengthHistogramm_constBinCount
     (
         const DistributedGraph& graph,
         std::uint64_t bin_count,
