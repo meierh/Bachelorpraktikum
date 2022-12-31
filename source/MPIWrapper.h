@@ -373,6 +373,14 @@ public:
 	}
 	
 	template<typename T>
+	static void all_gatherv(T* src, int count, T* dest, int* destCounts, int* displs, MPI_Datatype datatype){
+		if (const auto error_code= MPI_Allgatherv(src,count,datatype,dest,destCounts,displs,datatype,MPI_COMM_WORLD);	error_code != 0) {
+			std::cout << "All_Gatherving all values returned the error: " << error_code << std::endl;
+			throw error_code;
+		}
+	}
+	
+	template<typename T>
 	static void passive_sync_RMA_get(void *dest_addr, int count, int src_disp, int src_rank, MPI_Datatype datatype, const RMAWindow<T>& rma_window)
 	{
 		lock_window_shared(src_rank,rma_window.window);

@@ -493,6 +493,12 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
     return std::move(edgeLengthHistogramm(graph,bin_count_histogram_creator,resultToRank));
 }
 
+void GraphProperty::networkTripleMotifs(const DistributedGraph& graph)
+{
+    
+}
+
+
 std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
 (
     const DistributedGraph& graph,
@@ -610,7 +616,6 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
 
     return std::move(histogram);
 }
-
 
 template<typename DATA> 
 std::tuple<
@@ -843,3 +848,296 @@ GraphProperty::collectAlongEdges_InToOut
     );
 }
 
+template<typename Q_parameter,typename A_parameter>
+std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>> GraphProperty::node_to_node_question
+(
+    const DistributedGraph& graph,
+    MPI_Datatype MPI_Q_parameter,
+    std::function<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>&(DistributedGraph& dg,std::uint64_t node_local_ind)> generateAddressees,
+    MPI_Datatype MPI_A_parameter,
+    std::function<A_parameter(DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
+)
+{
+    const int my_rank = MPIWrapper::get_my_rank();
+    const int number_ranks = MPIWrapper::get_number_ranks();
+    const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
+    
+    // Create Questioners structure
+    auto questioner_structure = std::make_unique<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>>();
+    for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
+    {
+        questioner_structure->addAddresseesAndParameterFromOneNode(generateAddressees(graph,node_local_ind),node_local_ind);
+    }
+    
+    // Distribute number of questions to each rank
+    std::vector<int>& send_ranks_to_nbrOfQuestions = questioner_structure->get_ranks_to_nbrOfQuestions(number_ranks);
+    std::vector<int> global_ranks_to_nbrOfQuestions(number_ranks*number_ranks);    
+    std::vector<int> destCounts_ranks_to_nbrOfQuestions(number_ranks,number_ranks);
+    std::vector<int> displ_ranks_to_nbrOfQuestions(number_ranks);
+    for(int index = 0;index<displ_ranks_to_nbrOfQuestions.size();index++)
+    {
+        displ_ranks_to_nbrOfQuestions[index]=number_ranks*index;
+    }
+    MPIWrapper::all_gatherv<int>(send_ranks_to_nbrOfQuestions.data(), number_ranks,
+                                global_ranks_to_nbrOfQuestions.data(), destCounts_ranks_to_nbrOfQuestions.data(), displ_ranks_to_nbrOfQuestions.data(), MPI_INT);
+    
+    // Distribute questions to each rank
+    std::vector<int> recv_ranks_to_nbrOfQuestions(number_ranks);
+    std::memcpy(recv_ranks_to_nbrOfQuestions.data(),&global_ranks_to_nbrOfQuestions[my_rank*number_ranks],number_ranks*sizeof(int));
+    std::vector<int> displ_recv_ranks_to_nbrOfQuestions(number_ranks,0);
+    for(int index = 1;index<displ_recv_ranks_to_nbrOfQuestions.size();index++)
+    {
+        displ_recv_ranks_to_nbrOfQuestions[index]=
+            displ_recv_ranks_to_nbrOfQuestions[index-1]+recv_ranks_to_nbrOfQuestions[index-1];
+    }
+    int my_rank_total_receive_size = std::accumulate(recv_ranks_to_nbrOfQuestions.begin(),
+                                                     recv_ranks_to_nbrOfQuestions.end(),0);
+    std::vector<std::uint64_t> my_rank_total_nodes_to_ask_question(my_rank_total_receive_size);
+    std::vector<Q_parameter> my_rank_total_question_parameters(my_rank_total_receive_size);
+    for(int rank=0;rank<number_ranks;rank++)
+    {
+        std::vector<std::uint64_t>& nodes_to_ask_question_for_rank =
+            questioner_structure->get_nodes_to_ask_question_for_rank(rank);
+        std::vector<Q_parameter>& question_parameters_for_rank =
+            questioner_structure->get_question_parameters_for_rank(rank);
+        
+        int count = nodes_to_ask_question_for_rank.size();
+        
+        MPIWrapper::gatherv<std::uint64_t>(nodes_to_ask_question_for_rank.data(), count,
+                                           my_rank_total_nodes_to_ask_question.data(),
+                                           recv_ranks_to_nbrOfQuestions.data(), displ_recv_ranks_to_nbrOfQuestions.data(),MPI_UINT64_T,rank);
+        
+        MPIWrapper::gatherv<Q_parameter>(nodes_to_ask_question_for_rank.data(), count,
+                                         my_rank_total_question_parameters.data(),
+                                         recv_ranks_to_nbrOfQuestions.data(), displ_recv_ranks_to_nbrOfQuestions.data(),MPI_Q_parameter,rank);
+    }
+
+    // Create Adressees structure
+    GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter> adressee_structure;
+    adressee_structure.setQuestionsAndParameterRecv(my_rank_total_nodes_to_ask_question,
+                                                    my_rank_total_question_parameters,
+                                                    recv_ranks_to_nbrOfQuestions,
+                                                    displ_recv_ranks_to_nbrOfQuestions);
+    
+    // Compute the answers
+    adressee_structure.computeAnswersToQuestions(generateAnswers);
+    
+    // Distribute answers to each rank
+    std::vector<int>& send_ranks_to_nbrOfAnswers =  questioner_structure->get_ranks_to_nbrOfQuestions(number_ranks);
+    std::vector<int> displ_send_ranks_to_nbrOfAnswers(number_ranks,0);
+    for(int index = 1;index<displ_send_ranks_to_nbrOfAnswers.size();index++)
+    {
+        displ_send_ranks_to_nbrOfAnswers[index]=
+            displ_send_ranks_to_nbrOfAnswers[index-1]+send_ranks_to_nbrOfAnswers[index-1];
+    }
+    my_rank_total_receive_size = std::accumulate(send_ranks_to_nbrOfAnswers.begin(),
+                                                 send_ranks_to_nbrOfAnswers.end(),0);
+    std::vector<A_parameter> my_rank_total_answer_parameters(my_rank_total_receive_size);
+    for(int rank=0;rank<number_ranks;rank++)
+    {
+        std::vector<A_parameter>& answers_for_rank =
+            adressee_structure.get_answers_for_rank(rank);
+        
+        int count = answers_for_rank.size();        
+        
+        MPIWrapper::gatherv<A_parameter>(answers_for_rank.data(), count,
+                                         my_rank_total_answer_parameters.data(),
+                                         send_ranks_to_nbrOfAnswers.data(), displ_send_ranks_to_nbrOfAnswers.data(),MPI_A_parameter,rank);
+    }
+    questioner_structure->setAnswers(my_rank_total_answer_parameters,send_ranks_to_nbrOfAnswers,
+                                    displ_send_ranks_to_nbrOfAnswers);
+    
+    return std::move(questioner_structure);
+}
+
+template<typename Q_parameter,typename A_parameter>
+void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::addAddresseesAndParameterFromOneNode
+(
+    std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>& list_of_adressees_and_parameter,
+    std::uint64_t questioner
+)
+{
+    for(auto [target_rank,target_local_node,Q_parameter_struct] : list_of_adressees_and_parameter)
+    {
+        const auto rank_to_index = rank_to_outerIndex.find(target_rank);
+            
+        if(rank_to_index != rank_to_outerIndex.end())
+        // If rank was already encoutered due to other outEdge 
+        {
+            std::uint64_t outerIndex = rank_to_index->first;
+            nodes_to_ask_question[outerIndex].push_back(target_local_node);
+            nodes_that_ask_the_question[outerIndex].push_back(questioner);
+            question_parameters[outerIndex].push_back(Q_parameter_struct);
+            
+            std::uint64_t innerIndex = nodes_to_ask_question.size();
+            
+            auto doublePair = 
+            std::pair<std::uint64_t,std::pair<std::uint64_t,std::uint64_t>>(questioner,{outerIndex,innerIndex});
+            questioner_node_to_outerIndex_and_innerIndex.insert(doublePair);
+        }
+        else
+        {
+            nodes_to_ask_question.push_back({target_local_node});
+            nodes_that_ask_the_question.push_back({questioner});
+            question_parameters.push_back({Q_parameter_struct});
+            
+            std::uint64_t outerIndex = nodes_to_ask_question.size();
+            std::uint64_t innerIndex = 0;
+            
+            auto doublePair = 
+            std::pair<std::uint64_t,std::pair<std::uint64_t,std::uint64_t>>(questioner,{outerIndex,innerIndex});
+            questioner_node_to_outerIndex_and_innerIndex.insert(doublePair);
+                    
+            rank_to_outerIndex.insert({target_rank,outerIndex});
+        }
+    }
+}
+
+template<typename Q_parameter,typename A_parameter>
+void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::setQuestionsAndParameterRecv
+(
+    std::vector<std::uint64_t>& total_nodes_to_ask_question,
+    std::vector<Q_parameter>& total_question_parameters,
+    std::vector<int>& rank_size,
+    std::vector<int>& rank_displ
+)
+{
+    for(int rank=0;rank<rank_size.size();rank++)
+    {
+        int nbr_of_questions = rank_size[rank];
+        if(nbr_of_questions > 0)
+        {
+            int outerIndex = rank_of_list_index.size();
+            rank_to_outerIndex.insert(std::pair<std::uint64_t,std::uint64_t>(rank,outerIndex));
+            nodes_to_ask_question.push_back({});
+            nodes_to_ask_question.back().resize(nbr_of_questions);
+            std::memcpy(&nodes_to_ask_question[outerIndex],&total_nodes_to_ask_question[rank_displ[rank]],nbr_of_questions);
+            rank_of_list_index.push_back(rank);
+            
+            question_parameters.push_back({});
+            question_parameters.back().resize(nbr_of_questions);
+            std::memcpy(&question_parameters[outerIndex],&total_question_parameters[rank_displ[rank]],nbr_of_questions);
+            
+            ranks_to_nbrOfQuestions.push_back(nbr_of_questions);
+        }
+    }
+}
+
+template<typename Q_parameter,typename A_parameter>
+void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::setAnswers
+(
+    std::vector<A_parameter>& total_answers,
+    std::vector<int>& rank_size,
+    std::vector<int>& rank_displ
+)
+{
+    for(int rank=0;rank<rank_size.size();rank++)
+    {
+        int nbr_of_answers = rank_size[rank];
+        if(nbr_of_answers > 0)
+        {
+            auto keyValue = rank_to_outerIndex.find(rank);
+            assert(keyValue!=rank_to_outerIndex.end());
+            int outerIndex = keyValue->second;
+            
+            answers_to_questions.push_back({});
+            answers_to_questions.back().resize(nbr_of_answers);
+            std::memcpy(&answers_to_questions[outerIndex],&total_answers[rank_displ[rank]],nbr_of_answers);
+        }
+    }
+}
+
+template<typename Q_parameter,typename A_parameter>
+void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::computeAnswersToQuestions
+(
+    DistributedGraph& dg,
+    std::function<A_parameter(DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
+)
+{
+    assert(nodes_that_ask_the_question.size()==question_parameters.size());
+    answers_to_questions.resize(question_parameters.size());
+    for(int i=0; i<question_parameters.size(); i++)
+    {
+        assert(nodes_that_ask_the_question[i].size()==question_parameters[i].size());
+        answers_to_questions[i].resize(question_parameters.size());
+        for(int j=0; j<question_parameters[i].size(); j++)
+        {
+            std::uint64_t node_local_ind = nodes_to_ask_question[i][j];
+            Q_parameter para = question_parameters[i][j];
+            answers_to_questions[i][j] = generateAnswers(dg,node_local_ind,para);
+        }
+    }
+}
+
+template<typename Q_parameter,typename A_parameter>
+std::vector<int>& GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::get_ranks_to_nbrOfQuestions
+(
+    const int number_ranks
+)
+{
+    ranks_to_nbrOfQuestions.resize(number_ranks,0);
+    for(int index=0;index<rank_of_list_index.size();index++)
+    {
+        std::uint64_t rank = rank_of_list_index[index];
+        assert(rank<number_ranks);
+        ranks_to_nbrOfQuestions[rank] = nodes_to_ask_question[index].size();
+    }
+    return ranks_to_nbrOfQuestions;
+}
+
+template<typename Q_parameter,typename A_parameter>
+std::vector<std::uint64_t>& GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::get_nodes_to_ask_question_for_rank
+(
+    std::uint64_t ranks
+)
+{
+    auto keyValue = rank_to_outerIndex.find(ranks);
+    if(keyValue!=rank_to_outerIndex.end() && nodes_that_ask_the_question.size()!=0)
+    {
+        std::uint64_t outerIndex = keyValue->second;
+        assert(outerIndex<nodes_that_ask_the_question.size());
+        return nodes_that_ask_the_question[outerIndex];
+    }
+    else
+    {
+        return dummy_nodes_to_ask_question;
+    }
+}
+
+template<typename Q_parameter,typename A_parameter>
+std::vector<Q_parameter>& GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::get_question_parameters_for_rank
+(
+    std::uint64_t ranks
+)
+{
+    auto keyValue = rank_to_outerIndex.find(ranks);
+    if(keyValue!=rank_to_outerIndex.end())
+    {
+        std::uint64_t outerIndex = keyValue->second;
+        assert(outerIndex<question_parameters.size());
+        return question_parameters[outerIndex];
+    }
+    else
+    {
+        return dummy_question_parameters;
+    }
+}
+
+template<typename Q_parameter,typename A_parameter>
+std::vector<A_parameter>& GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::get_answers_for_rank
+(
+    std::uint64_t ranks
+)
+{
+    auto keyValue = rank_to_outerIndex.find(ranks);
+    if(keyValue!=rank_to_outerIndex.end() && answers_to_questions.size()!=0)
+    {
+        std::uint64_t outerIndex = keyValue->second;
+        assert(outerIndex<nodes_that_ask_the_question.size());
+        return answers_to_questions[outerIndex];
+    }
+    else
+    {
+        return dummy_nodes_to_ask_question;
+    }
+}

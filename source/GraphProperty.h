@@ -55,6 +55,8 @@ public:
         unsigned int resultToRank=0
     );
     
+    static void networkTripleMotifs(const DistributedGraph& graph);
+    
 private:
     static inline unsigned int cantorPair(unsigned int k1, unsigned int k2) {return (((k1+k2)*(k1+k2+1))/2)+k2;}    
     
@@ -84,5 +86,70 @@ private:
         const DistributedGraph& graph,
         std::function<std::unique_ptr<Histogram>(double,double)> histogram_creator,
         unsigned int resultToRank
+    );
+    
+    template<typename Q_parameter,typename A_parameter>
+    class NodeToNodeQuestionStructure{
+        public:
+            void addAddresseesAndParameterFromOneNode
+            (
+                std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>& list_of_adressees_and_parameter,
+                std::uint64_t questioner
+            );
+            void setQuestionsAndParameterRecv
+            (
+                std::vector<std::uint64_t>& total_nodes_to_ask_question,
+                std::vector<Q_parameter>& total_question_parameters,
+                std::vector<int>& rank_size,
+                std::vector<int>& rank_displ
+            );
+            void computeAnswersToQuestions
+            (
+                DistributedGraph& dg,
+                std::function<A_parameter(DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
+            );
+            void setAnswers
+            (
+                std::vector<A_parameter>& total_answers,
+                std::vector<int>& rank_size,
+                std::vector<int>& rank_displ
+            );
+            
+            std::vector<int>& get_ranks_to_nbrOfQuestions(const int number_ranks);
+            std::vector<std::uint64_t>& get_nodes_to_ask_question_for_rank(std::uint64_t rank);
+            std::vector<Q_parameter>& get_question_parameters_for_rank(std::uint64_t rank);
+            std::vector<A_parameter>& get_answers_for_rank(std::uint64_t ranks);
+        private:
+            // stores index in nodes_to_ask_question for each rank
+            std::unordered_map<std::uint64_t,std::uint64_t> rank_to_outerIndex;
+            // list of list of nodes to ask questions 
+            std::vector<std::vector<std::uint64_t>> nodes_to_ask_question;
+            // list of ranks coresponding to nodes_to_ask_question
+            std::vector<std::uint64_t> rank_of_list_index;
+            // list of list of nodes that ask the questions coresponding to nodes_to_ask_question
+            std::vector<std::vector<std::uint64_t>> nodes_that_ask_the_question;
+            // stores index in nodes_to_ask_question for each rank
+            std::unordered_multimap<std::uint64_t,std::pair<std::uint64_t,std::uint64_t>> questioner_node_to_outerIndex_and_innerIndex;
+            // list of list of parameters coresponding to nodes_to_ask_question
+            std::vector<std::vector<Q_parameter>> question_parameters;
+            // list of all ranks to number of questions
+            std::vector<int> ranks_to_nbrOfQuestions;
+            // list of list of answers coresponding to nodes_to_ask_question
+            std::vector<std::vector<A_parameter>> answers_to_questions;
+            
+            std::vector<std::uint64_t> dummy_nodes_to_ask_question;
+            std::vector<Q_parameter> dummy_question_parameters;
+            std::vector<A_parameter> dummy_answers_to_questions;
+
+    };
+    
+    template<typename Q_parameter,typename A_parameter>
+    static std::unique_ptr<NodeToNodeQuestionStructure<Q_parameter,A_parameter>> node_to_node_question
+    (
+        const DistributedGraph& graph,
+        MPI_Datatype MPI_Q_parameter,
+        std::function<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>&(DistributedGraph& dg,std::uint64_t node_local_ind)> generateAddressees,
+        MPI_Datatype MPI_A_parameter,
+        std::function<A_parameter(DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
     );
 };
