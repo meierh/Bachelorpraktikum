@@ -55,7 +55,11 @@ public:
         unsigned int resultToRank=0
     );
     
-    static void networkTripleMotifs(const DistributedGraph& graph);
+    static std::vector<double> networkTripleMotifs
+    (
+        const DistributedGraph& graph,
+        unsigned int resultToRank = 0
+    );
     
 private:
     static inline unsigned int cantorPair(unsigned int k1, unsigned int k2) {return (((k1+k2)*(k1+k2+1))/2)+k2;}    
@@ -93,7 +97,7 @@ private:
         public:
             void addAddresseesAndParameterFromOneNode
             (
-                std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>& list_of_adressees_and_parameter,
+                std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>> list_of_adressees_and_parameter,
                 std::uint64_t questioner
             );
             void setQuestionsAndParameterRecv
@@ -105,8 +109,8 @@ private:
             );
             void computeAnswersToQuestions
             (
-                DistributedGraph& dg,
-                std::function<A_parameter(DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
+                const DistributedGraph& dg,
+                std::function<A_parameter(const DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
             );
             void setAnswers
             (
@@ -114,7 +118,10 @@ private:
                 std::vector<int>& rank_size,
                 std::vector<int>& rank_displ
             );
-            
+            std::unique_ptr<std::vector<A_parameter>> getAnswersOfQuestionerNode
+            (
+                std::uint64_t node_local_ind
+            );
             std::vector<int>& get_ranks_to_nbrOfQuestions(const int number_ranks);
             std::vector<std::uint64_t>& get_nodes_to_ask_question_for_rank(std::uint64_t rank);
             std::vector<Q_parameter>& get_question_parameters_for_rank(std::uint64_t rank);
@@ -148,8 +155,46 @@ private:
     (
         const DistributedGraph& graph,
         MPI_Datatype MPI_Q_parameter,
-        std::function<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>&(DistributedGraph& dg,std::uint64_t node_local_ind)> generateAddressees,
+        std::function<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>(const DistributedGraph& dg,std::uint64_t node_local_ind)> generateAddressees,
         MPI_Datatype MPI_A_parameter,
-        std::function<A_parameter(DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
+        std::function<A_parameter(const DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
     );
+    
+    typedef struct
+    {
+        std::uint64_t node_1_rank;
+        std::uint64_t node_1_local;
+        std::uint64_t node_2_rank;
+        std::uint64_t node_2_local;
+        std::uint64_t node_3_rank;
+        std::uint64_t node_3_local;
+        std::uint16_t motifTypeBitArray;
+        
+        void setMotifTypes(std::vector<int> motifTypes)
+        {
+            for(int motifType : motifTypes)
+            {
+                assert(motifType>=1 && motifType<14);
+                motifTypeBitArray |= (1<<motifType);
+            }
+        }
+        void unsetMotifTypes(std::vector<int> motifTypes)
+        {
+            for(int motifType : motifTypes)
+            {
+                assert(motifType>=1 && motifType<14);
+                motifTypeBitArray &= ~(1<<motifType);
+            }
+        }
+        bool isMotifTypeSet(int motifType)
+        {
+            assert(motifType>=1 && motifType<14);
+            return motifTypeBitArray & (1<<motifType);
+        }
+        bool checkValidity()
+        {
+            return motifTypeBitArray && !(motifTypeBitArray & (motifTypeBitArray-1));
+        }
+    } threeMotifStructure;
+    
 };

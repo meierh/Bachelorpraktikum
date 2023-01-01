@@ -119,6 +119,7 @@ public:
 	inline static MPI_Datatype MPI_InEdge;
 	inline static MPI_Datatype MPI_OutEdge;
 	inline static MPI_Datatype MPI_stdPair_of_AreaLocalID;
+	inline static MPI_Datatype MPI_threeMotifStructure;
 	
 	static void init(int argument_count, char* arguments[]) {
 		if (const auto error_code = MPI_Init(&argument_count, &arguments); error_code != 0) {

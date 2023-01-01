@@ -493,9 +493,227 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
     return std::move(edgeLengthHistogramm(graph,bin_count_histogram_creator,resultToRank));
 }
 
-void GraphProperty::networkTripleMotifs(const DistributedGraph& graph)
+std::vector<double> GraphProperty::networkTripleMotifs
+(
+    const DistributedGraph& graph,
+    unsigned int resultToRank
+)
 {
+    const int my_rank = MPIWrapper::get_my_rank();
+    const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
+        
+    //Create rank local area distance sum
+    std::function<std::vector<std::tuple<std::uint64_t,std::uint64_t,threeMotifStructure>>
+                 (const DistributedGraph& dg,std::uint64_t node_local_ind)>
+        collect_possible_networkMotifs_oneNode = [](const DistributedGraph& dg,std::uint64_t node_local_ind)
+        {
+            const int my_rank = MPIWrapper::get_my_rank();
+            
+            std::vector<std::tuple<std::uint64_t,std::uint64_t,threeMotifStructure>> this_node_possible_motifs;
+            
+            const std::vector<OutEdge>& oEdges = dg.get_out_edges(my_rank,node_local_ind);
+            const std::vector<InEdge>& iEdges = dg.get_in_edges(my_rank,node_local_ind);
+            
+            std::unordered_map<std::pair<std::uint64_t,std::uint64_t>,
+                            std::pair<bool,bool>,
+                            stdPair_hash> adjacent_nodes;
+            
+            for(const OutEdge& oEdge : oEdges)
+            {
+                std::pair<std::uint64_t,std::uint64_t> node_key(oEdge.target_rank,oEdge.target_id);
+                std::pair<bool,bool>& value = adjacent_nodes[node_key];
+                assert(!value.first);
+                value.first = true;
+            }
+            for(const InEdge& iEdge : iEdges)
+            {
+                std::pair<std::uint64_t,std::uint64_t> node_key(iEdge.source_rank,iEdge.source_id);
+                std::pair<bool,bool>& value = adjacent_nodes[node_key];
+                assert(!value.second);
+                value.second = true;
+            }
+            for(auto iterOuter = adjacent_nodes.begin(); iterOuter!=adjacent_nodes.end(); iterOuter++)
+            {
+                std::pair<std::uint64_t,std::uint64_t> node_Outer_key = iterOuter->first;
+                
+                for(auto iterInner = adjacent_nodes.begin(); iterInner!=adjacent_nodes.end(); iterInner++)
+                {
+                    std::pair<std::uint64_t,std::uint64_t> node_Inner_key = iterInner->first;
+                    
+                    if(node_Inner_key != node_Outer_key)
+                    {
+                        //std::tuple<std::uint64_t,std::uint64_t,threeMotifStructure> possible_motif;
+                        threeMotifStructure motifStruc;
+                        motifStruc.node_1_rank = my_rank;
+                        motifStruc.node_1_local = node_local_ind;
+                        motifStruc.node_2_rank = node_Outer_key.first;
+                        motifStruc.node_2_local = node_Outer_key.second;
+                        motifStruc.node_3_rank = node_Inner_key.first;
+                        motifStruc.node_3_local = node_Inner_key.second;
+                        
+                        bool node_2_exists_outEdge = iterOuter->second.first;
+                        bool node_2_exists_inEdge  = iterOuter->second.second;
+                        bool node_3_exists_outEdge = iterInner->second.first;
+                        bool node_3_exists_inEdge  = iterInner->second.second;
+
+                        std::uint8_t exists_edge_bitArray = 0;
+                        exists_edge_bitArray |= node_2_exists_outEdge?1:0;
+                        exists_edge_bitArray |= node_2_exists_inEdge?2:0;
+                        exists_edge_bitArray |= node_3_exists_outEdge?4:0;
+                        exists_edge_bitArray |= node_3_exists_inEdge?8:0;
+
+                        switch (exists_edge_bitArray)
+                        {
+                            case 10:
+                                //three node motif 1 & 11 (1010)
+                                motifStruc.setMotifTypes({1,11});
+                                break;
+                            case 9:
+                                //three node motif 2 & 7 (1001)
+                                motifStruc.setMotifTypes({2,7});
+                                break;
+                            case 5:
+                                //three node motif 3 & 5 & 8 (0101)
+                                motifStruc.setMotifTypes({3,5,8});
+                                break;
+                            case 11:
+                                //three node motif 4 (1011)
+                                motifStruc.setMotifTypes({4});
+                                break;
+                            case 7:
+                                //three node motif 6 (0111)
+                                motifStruc.setMotifTypes({6});
+                                break;
+                            case 15:
+                                //three node motif 9 & 12 & 13 (1111)
+                                motifStruc.setMotifTypes({9,12,13});
+                                break;
+                            case 6:
+                                //three node motif 10 & 7 (0110)
+                                motifStruc.setMotifTypes({10,7});
+                                break;
+                            default:
+                                assert(false);
+                        }
+                        
+                        auto possible_motif = std::tie<std::uint64_t,std::uint64_t,threeMotifStructure>
+                                                        (node_Outer_key.first,node_Outer_key.second,motifStruc);
+                        this_node_possible_motifs.push_back(possible_motif);
+                    }
+                }
+            }
+            return this_node_possible_motifs;
+        };
     
+    std::function<threeMotifStructure
+                (const DistributedGraph& dg,std::uint64_t node_local_ind,threeMotifStructure para)> 
+        evaluate_correct_networkMotifs_oneNode = 
+                [](const DistributedGraph& dg,std::uint64_t node_local_ind,threeMotifStructure possible_motif)
+        {
+            assert(node_local_ind==possible_motif.node_2_local);
+            const int my_rank = MPIWrapper::get_my_rank();
+            assert(my_rank==possible_motif.node_2_rank);
+            
+            const std::vector<OutEdge>& oEdges = dg.get_out_edges(my_rank,node_local_ind);
+            const std::vector<InEdge>& iEdges = dg.get_in_edges(my_rank,node_local_ind);
+            
+            std::unordered_map<std::pair<std::uint64_t,std::uint64_t>,
+                            std::pair<bool,bool>,
+                            stdPair_hash> adjacent_nodes;
+            
+            for(const OutEdge& oEdge : oEdges)
+            {
+                std::pair<std::uint64_t,std::uint64_t> node_key(oEdge.target_rank,oEdge.target_id);
+                std::pair<bool,bool>& value = adjacent_nodes[node_key];
+                assert(!value.first);
+                value.first = true;
+            }
+            for(const InEdge& iEdge : iEdges)
+            {
+                std::pair<std::uint64_t,std::uint64_t> node_key(iEdge.source_rank,iEdge.source_id);
+                std::pair<bool,bool>& value = adjacent_nodes[node_key];
+                assert(!value.second);
+                value.second = true;
+            }
+            
+            std::pair<std::uint64_t,std::uint64_t> node_3_key(possible_motif.node_3_rank,possible_motif.node_3_local);
+            std::pair<bool,bool>& value = adjacent_nodes[node_3_key];
+            
+            bool exists_edge_node2_to_node3 = value.first;
+            bool exists_edge_node3_to_node2 = value.second;
+            
+            if(exists_edge_node2_to_node3 && exists_edge_node3_to_node2)
+            // edges between node 2 and 3 in both directions
+            {
+                //maintain motifs 8,10,11,13
+                possible_motif.unsetMotifTypes({1,2,3,4,5,6,7,9,12});
+            }
+            else if(exists_edge_node2_to_node3 && !exists_edge_node2_to_node3)
+            // only edge from node 2 to node 3 
+            {
+                //maintain motifs 5,7
+                possible_motif.unsetMotifTypes({1,2,3,4,6,8,9,10,11,12,13});
+            }
+            else if(!exists_edge_node2_to_node3 && exists_edge_node2_to_node3)
+            // only edge from node 3 to node 2 
+            {
+                //maintain motifs 12
+                possible_motif.unsetMotifTypes({1,2,3,4,5,6,7,8,9,10,11,13});
+            }
+            else
+            // no edges between node 2 and 3
+            {
+                //maintain motifs 1,2,3,4,6,9
+                possible_motif.unsetMotifTypes({5,7,8,10,11,12,13});
+            }
+            assert(possible_motif.checkValidity());
+            
+            return possible_motif;
+        };
+    
+    std::unique_ptr<NodeToNodeQuestionStructure<threeMotifStructure,threeMotifStructure>> threeMotifResults;
+    threeMotifResults = std::move(node_to_node_question<threeMotifStructure,threeMotifStructure>
+                            (graph,MPIWrapper::MPI_threeMotifStructure,collect_possible_networkMotifs_oneNode,
+                                   MPIWrapper::MPI_threeMotifStructure,evaluate_correct_networkMotifs_oneNode));
+    
+    std::vector<std::uint64_t> motifTypeCount(14,0);
+    for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
+    {
+        std::unique_ptr<std::vector<threeMotifStructure>> this_node_motifs_results;
+        this_node_motifs_results = threeMotifResults->getAnswersOfQuestionerNode(node_local_ind);
+        
+        for(int i=0;i<this_node_motifs_results->size();i++)
+        {
+            threeMotifStructure& one_motif = (*this_node_motifs_results)[i];
+            for(int motifType=1;motifType<14;motifType++)
+            {
+                if(one_motif.isMotifTypeSet(motifType))
+                    motifTypeCount[motifType]++;
+            }
+        }
+    }
+    
+    std::vector<std::uint64_t> motifTypeCountTotal;
+    if(my_rank==resultToRank)
+    {
+        motifTypeCountTotal.resize(14);
+    }
+    
+    MPIWrapper::reduce<std::uint64_t>(motifTypeCount.data(),motifTypeCountTotal.data(),                                      
+                                      14,MPI_UINT64_T,MPI_SUM,resultToRank);
+    
+    std::vector<double> motifFraction;
+    if(my_rank==resultToRank)
+    {
+        std::uint64_t total_number_of_motifs = std::accumulate(motifTypeCountTotal.begin(),motifTypeCountTotal.end(),0);
+        motifFraction.resize(motifTypeCountTotal.size());
+        
+        for(int motifType=1;motifType<14;motifType++)
+        {
+            motifFraction[motifType] = (double)motifTypeCountTotal[motifType] / (double)total_number_of_motifs;
+        }
+    }
+    return motifFraction;
 }
 
 
@@ -853,9 +1071,9 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
 (
     const DistributedGraph& graph,
     MPI_Datatype MPI_Q_parameter,
-    std::function<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>&(DistributedGraph& dg,std::uint64_t node_local_ind)> generateAddressees,
+    std::function<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>(const DistributedGraph& dg,std::uint64_t node_local_ind)> generateAddressees,
     MPI_Datatype MPI_A_parameter,
-    std::function<A_parameter(DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
+    std::function<A_parameter(const DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
 )
 {
     const int my_rank = MPIWrapper::get_my_rank();
@@ -907,7 +1125,7 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
                                            my_rank_total_nodes_to_ask_question.data(),
                                            recv_ranks_to_nbrOfQuestions.data(), displ_recv_ranks_to_nbrOfQuestions.data(),MPI_UINT64_T,rank);
         
-        MPIWrapper::gatherv<Q_parameter>(nodes_to_ask_question_for_rank.data(), count,
+        MPIWrapper::gatherv<Q_parameter>(question_parameters_for_rank.data(), count,
                                          my_rank_total_question_parameters.data(),
                                          recv_ranks_to_nbrOfQuestions.data(), displ_recv_ranks_to_nbrOfQuestions.data(),MPI_Q_parameter,rank);
     }
@@ -920,7 +1138,7 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
                                                     displ_recv_ranks_to_nbrOfQuestions);
     
     // Compute the answers
-    adressee_structure.computeAnswersToQuestions(generateAnswers);
+    adressee_structure.computeAnswersToQuestions(graph,generateAnswers);
     
     // Distribute answers to each rank
     std::vector<int>& send_ranks_to_nbrOfAnswers =  questioner_structure->get_ranks_to_nbrOfQuestions(number_ranks);
@@ -953,7 +1171,7 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
 template<typename Q_parameter,typename A_parameter>
 void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::addAddresseesAndParameterFromOneNode
 (
-    std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>& list_of_adressees_and_parameter,
+    std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>> list_of_adressees_and_parameter,
     std::uint64_t questioner
 )
 {
@@ -1050,8 +1268,8 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::setAns
 template<typename Q_parameter,typename A_parameter>
 void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::computeAnswersToQuestions
 (
-    DistributedGraph& dg,
-    std::function<A_parameter(DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
+    const DistributedGraph& dg,
+    std::function<A_parameter(const DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
 )
 {
     assert(nodes_that_ask_the_question.size()==question_parameters.size());
@@ -1138,6 +1356,24 @@ std::vector<A_parameter>& GraphProperty::NodeToNodeQuestionStructure<Q_parameter
     }
     else
     {
-        return dummy_nodes_to_ask_question;
+        return dummy_answers_to_questions;
     }
+}
+
+template<typename Q_parameter,typename A_parameter>
+std::unique_ptr<std::vector<A_parameter>> GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::getAnswersOfQuestionerNode
+(
+    std::uint64_t node_local_ind
+)
+{
+    auto answers = std::make_unique<std::vector<A_parameter>>();
+    for(auto keyValue = questioner_node_to_outerIndex_and_innerIndex.find(node_local_ind);
+        keyValue->first == node_local_ind;
+        keyValue++)
+    {
+        std::uint64_t outerIndex = keyValue->second.first;
+        std::uint64_t innerIndex = keyValue->second.second;
+        answers->push_back(answers_to_questions[outerIndex][innerIndex]);
+    }
+    return std::move(answers);
 }
