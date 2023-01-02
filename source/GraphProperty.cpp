@@ -701,7 +701,14 @@ std::vector<double> GraphProperty::networkTripleMotifs
     
     MPIWrapper::reduce<std::uint64_t>(motifTypeCount.data(),motifTypeCountTotal.data(),                                      
                                       14,MPI_UINT64_T,MPI_SUM,resultToRank);
-    
+    if(my_rank==resultToRank)
+    {
+        //Rotational invariant motifs where counted three times each
+        assert(motifTypeCountTotal[7]%3==0);
+        motifTypeCountTotal[7]/=3;
+        assert(motifTypeCountTotal[13]%3==0);
+        motifTypeCountTotal[13]/=3;        
+    }
     std::vector<double> motifFraction;
     if(my_rank==resultToRank)
     {
