@@ -120,6 +120,7 @@ public:
 	inline static MPI_Datatype MPI_OutEdge;
 	inline static MPI_Datatype MPI_stdPair_of_AreaLocalID;
 	inline static MPI_Datatype MPI_threeMotifStructure;
+	inline static MPI_Datatype MPI_nodeModularityInfo;
 	
 	static void init(int argument_count, char* arguments[]) {
 		if (const auto error_code = MPI_Init(&argument_count, &arguments); error_code != 0) {
@@ -361,6 +362,14 @@ public:
 	static void gather(T* src, T* dest, int count, MPI_Datatype datatype,int root){
 		if (const auto error_code= MPI_Gather(src,count,datatype,dest,count,datatype,root,MPI_COMM_WORLD);	error_code != 0) {
 			std::cout << "Gathering all values returned the error: " << error_code << std::endl;
+			throw error_code;
+		}
+	}
+	
+	template<typename T>
+	static void all_gather(T* src, T* dest, int count, MPI_Datatype datatype){
+		if (const auto error_code= MPI_Allgather(src,count,datatype,dest,count,datatype,MPI_COMM_WORLD);	error_code != 0) {
+			std::cout << "All_Gathering all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
 	}

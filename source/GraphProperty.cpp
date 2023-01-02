@@ -716,6 +716,204 @@ std::vector<double> GraphProperty::networkTripleMotifs
     return motifFraction;
 }
 
+double GraphProperty::computeModularity
+(
+    const DistributedGraph& graph
+)
+{
+    const int my_rank = MPIWrapper::get_my_rank();
+    const int number_ranks = MPIWrapper::get_number_ranks();
+    const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
+    const std::vector<std::string>& area_names = graph.get_local_area_names();
+
+    // Find maximum name length
+    int maxLengthName = std::max_element(area_names.begin(), area_names.end(),
+                                               [](std::string a, std::string b) {return a.size() < b.size();}
+                                               )->size();
+    int global_maxLength_Name = MPIWrapper::all_reduce<int>(maxLengthName,MPI_INT,MPI_MAX);
+    
+    // Distribute number of names per rank to all ranks
+    std::vector<int> global_number_of_names(number_ranks);
+    int local_number_names = area_names.size();
+    MPIWrapper::all_gather<int>(&local_number_names, global_number_of_names.data(), 1, MPI_INT);
+    
+    // Distribute length of names in all ranks to all ranks
+    std::vector<int> global_sizes_of_names(std::accumulate(global_number_of_names.begin(),global_number_of_names.end(),0));
+    std::vector<int> global_sizes_of_names_displ(number_ranks);
+    std::partial_sum(global_number_of_names.begin(), global_number_of_names.end()-1,
+                     global_sizes_of_names_displ.begin()+1, std::plus<int>());
+    std::vector<int> local_sizes_of_names(area_names.size());
+    std::transform(area_names.cbegin(),area_names.cend(),local_sizes_of_names.begin(),
+                   [](std::string s){return s.size();});
+    MPIWrapper::all_gatherv<int>(local_sizes_of_names.data(),local_number_names,
+                                 global_sizes_of_names.data(),global_number_of_names.data(),
+                                 global_sizes_of_names_displ.data(), MPI_INT);
+    
+    // Distribute characters of names in all ranks to all ranks
+    std::vector<char> global_char_of_names(std::accumulate(global_sizes_of_names.begin(),global_sizes_of_names.end(),0));
+    std::vector<int> global_char_of_names_displ(number_ranks);
+    std::vector<int> global_sizes_of_char(number_ranks);
+    int displacement = 0;
+    for(int i=0;i<global_sizes_of_names_displ.size()-1;i++)
+    {
+        global_char_of_names_displ[i]=displacement;
+        global_sizes_of_char[i]=std::accumulate(global_sizes_of_names.begin()+global_sizes_of_names_displ[i],
+                                                global_sizes_of_names.begin()+global_sizes_of_names_displ[i+1],0);
+        displacement+=global_sizes_of_char[i];
+    }
+    std::vector<char> local_char_of_names;
+    std::for_each(area_names.cbegin(),area_names.cend(),
+                  [&](std::string s){local_char_of_names.insert(local_char_of_names.cend(),s.cbegin(),s.cend());});
+    MPIWrapper::all_gatherv<char>(local_char_of_names.data(),global_sizes_of_char[my_rank],
+                                 global_char_of_names.data(),global_sizes_of_char.data(),
+                                 global_char_of_names_displ.data(), MPI_CHAR);
+    std::vector<std::vector<std::string>> area_names_list_of_ranks(number_ranks);
+    for(int rank=0;rank<number_ranks;rank++)
+    {
+        int rank_char_begin = global_char_of_names_displ[rank];
+        int rank_number_of_names = global_number_of_names[rank];
+        std::vector<int> rank_sizes_of_names(rank_number_of_names);
+        std::memcpy(rank_sizes_of_names.data(),&global_sizes_of_names[global_sizes_of_names_displ[rank]],
+                    rank_number_of_names*sizeof(int));
+        for(int wordNbr=0;wordNbr<rank_number_of_names;wordNbr++)
+        {
+            std::string name(&global_char_of_names[rank_char_begin],rank_sizes_of_names[wordNbr]);
+            area_names_list_of_ranks[rank].push_back(name);
+        }
+    }
+    
+    //Create global name indices
+    std::unordered_map<std::string,std::uint64_t> area_names_map;
+    std::vector<std::string> area_names_list;
+    for(std::vector<std::string>& rank_names : area_names_list_of_ranks)
+    {
+        for(std::string& name : rank_names)
+        {
+            auto status = area_names_map.insert(std::pair<std::string,std::uint64_t>(name,area_names_list.size()));
+            if(status.second)
+            {
+                area_names_list.push_back(name);
+            }
+        }
+    }
+    
+    //Create rank local area distance sum
+    std::function<std::vector<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>>
+                 (const DistributedGraph& dg,std::uint64_t node_local_ind)>
+        collect_adjacency_area_info = [&](const DistributedGraph& dg,std::uint64_t node_local_ind)
+        {
+            const int my_rank = MPIWrapper::get_my_rank();
+            
+            std::uint64_t node_area_localID = dg.get_node_area_localID(my_rank, node_local_ind);
+            auto keyValue = area_names_map.find(area_names[node_area_localID]);
+            assert(keyValue!=area_names_map.end()); 
+            std::uint64_t area_global_ID = keyValue->second;
+            
+            std::vector<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>> outward_node_area;
+            
+            const std::vector<OutEdge>& oEdges = dg.get_out_edges(my_rank,node_local_ind);
+            for(const OutEdge& oEdge : oEdges)
+            {
+                std::uint64_t rank = oEdge.target_rank;
+                std::uint64_t id = oEdge.target_id;
+                outward_node_area.push_back(std::tie<std::uint64_t,std::uint64_t,std::uint64_t>
+                                                        (rank,id,area_global_ID));
+            }
+            return outward_node_area;
+        };
+        
+    std::function<bool(const DistributedGraph& dg,std::uint64_t node_local_ind,std::uint64_t area_global_ID)> 
+        test_for_adjacent_equal_Area = 
+                [&](const DistributedGraph& dg,std::uint64_t node_local_ind,std::uint64_t area_global_ID)
+        {
+            const int my_rank = MPIWrapper::get_my_rank();
+            
+            std::uint64_t node_area_localID = dg.get_node_area_localID(my_rank, node_local_ind);
+            auto keyValue = area_names_map.find(area_names[node_area_localID]);
+            assert(keyValue!=area_names_map.end());
+            
+            if(area_global_ID==keyValue->second)
+            {
+                return true;
+            }
+            return false;
+        };
+        
+    std::unique_ptr<NodeToNodeQuestionStructure<std::uint64_t,bool>> adjacency_results;
+    adjacency_results = std::move(node_to_node_question<std::uint64_t,bool>
+                            (graph,MPI_UINT64_T,collect_adjacency_area_info,
+                                   MPI_CXX_BOOL,test_for_adjacent_equal_Area));
+    
+    std::uint64_t local_adjacency_sum = 0;
+    for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
+    {
+        std::unique_ptr<std::vector<bool>> this_node_adjacency_results;
+        this_node_adjacency_results = adjacency_results->getAnswersOfQuestionerNode(node_local_ind);
+        
+        for(int i=0;i<this_node_adjacency_results->size();i++)
+        {
+            local_adjacency_sum += 1*(*this_node_adjacency_results)[i];
+        }
+    }
+    std::uint64_t global_adjacency_sum = MPIWrapper::all_reduce<std::uint64_t>(local_adjacency_sum,MPI_UINT64_T,MPI_SUM);
+    
+    std::vector<std::vector<nodeModularityInfo>> areaGlobalID_to_node(area_names_list.size());
+    for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
+    {         
+        std::uint64_t node_area_localID = graph.get_node_area_localID(my_rank, node_local_ind);
+        auto keyValue = area_names_map.find(area_names[node_area_localID]);
+        assert(keyValue!=area_names_map.end());
+        std::uint64_t area_global_ID = keyValue->second;
+    
+        const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank,node_local_ind);
+        const std::vector<InEdge>& iEdges = graph.get_in_edges(my_rank,node_local_ind);
+        nodeModularityInfo nodeInfo;
+        nodeInfo.node_in_degree = iEdges.size();
+        nodeInfo.node_out_degree = oEdges.size();
+        nodeInfo.area_global_ID = area_global_ID;
+        
+        areaGlobalID_to_node[area_global_ID].push_back(nodeInfo);
+    }
+    std::vector<std::vector<nodeModularityInfo>> local_areaGlobalID_to_node;
+    for(int area_global_ID=0;area_global_ID<area_names_list.size();area_global_ID++)
+    {
+        int calculationRank = area_global_ID%number_ranks;
+        
+        int area_local_size = areaGlobalID_to_node[area_global_ID].size();
+        int total_size;
+        MPIWrapper::reduce<int>(&total_size,&area_local_size,1,MPI_INT,MPI_SUM,calculationRank);
+        
+        if(my_rank==calculationRank)
+        {
+            local_areaGlobalID_to_node.push_back({});
+            local_areaGlobalID_to_node.back().resize(total_size);
+        }
+        MPIWrapper::gather<nodeModularityInfo>(areaGlobalID_to_node[area_global_ID].data(),local_areaGlobalID_to_node.back().data(),
+                                               area_local_size,MPIWrapper::MPI_nodeModularityInfo,calculationRank);
+    }
+    std::uint64_t local_in_out_degree_node_sum = 0;
+    for(std::vector<nodeModularityInfo>& nodes_of_area : local_areaGlobalID_to_node)
+    {
+        for(int i=0;i<nodes_of_area.size();i++)
+        {
+            for(int j=0;j<nodes_of_area.size();j++)
+            {
+                if(i!=j)
+                {
+                    assert(nodes_of_area[i].area_global_ID==nodes_of_area[j].area_global_ID);
+                    local_in_out_degree_node_sum+=(-(nodes_of_area[i].node_in_degree*nodes_of_area[j].node_out_degree));
+                }
+            }
+        }
+    }
+    std::uint64_t global_in_out_degree_node_sum = MPIWrapper::all_reduce<std::uint64_t>(local_in_out_degree_node_sum,
+                                                                                        MPI_UINT64_T,MPI_SUM);
+    
+    std::uint64_t local_m = number_local_nodes;
+    std::uint64_t global_m = MPIWrapper::all_reduce<std::uint64_t>(local_m,MPI_UINT64_T,MPI_SUM);
+
+    return (double)global_adjacency_sum/(double)(global_m*global_m) + (double)global_in_out_degree_node_sum/(double)(global_m);
+}
 
 std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
 (
@@ -1153,12 +1351,13 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
     std::vector<A_parameter> my_rank_total_answer_parameters(my_rank_total_receive_size);
     for(int rank=0;rank<number_ranks;rank++)
     {
-        std::vector<A_parameter>& answers_for_rank =
-            adressee_structure.get_answers_for_rank(rank);
+        std::vector<A_parameter>& answers_for_rank = adressee_structure.get_answers_for_rank(rank);
         
         int count = answers_for_rank.size();        
         
-        MPIWrapper::gatherv<A_parameter>(answers_for_rank.data(), count,
+        A_parameter* intermed = answers_for_rank.data();
+        
+        MPIWrapper::gatherv<A_parameter>(intermed, count,
                                          my_rank_total_answer_parameters.data(),
                                          send_ranks_to_nbrOfAnswers.data(), displ_send_ranks_to_nbrOfAnswers.data(),MPI_A_parameter,rank);
     }

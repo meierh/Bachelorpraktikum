@@ -61,6 +61,11 @@ public:
         unsigned int resultToRank = 0
     );
     
+    double computeModularity
+    (
+        const DistributedGraph& graph
+    );
+    
 private:
     static inline unsigned int cantorPair(unsigned int k1, unsigned int k2) {return (((k1+k2)*(k1+k2+1))/2)+k2;}    
     
@@ -196,5 +201,12 @@ private:
             return motifTypeBitArray && !(motifTypeBitArray & (motifTypeBitArray-1));
         }
     } threeMotifStructure;
+    
+    typedef struct
+    {
+        std::uint64_t node_in_degree;
+        std::uint64_t node_out_degree;
+        std::uint64_t area_global_ID;
+    } nodeModularityInfo;
     
 };
