@@ -822,7 +822,7 @@ double GraphProperty::computeModularity
             return outward_node_area;
         };
         
-    std::function<bool(const DistributedGraph& dg,std::uint64_t node_local_ind,std::uint64_t area_global_ID)> 
+    std::function<std::uint8_t(const DistributedGraph& dg,std::uint64_t node_local_ind,std::uint64_t area_global_ID)> 
         test_for_adjacent_equal_Area = 
                 [&](const DistributedGraph& dg,std::uint64_t node_local_ind,std::uint64_t area_global_ID)
         {
@@ -834,25 +834,25 @@ double GraphProperty::computeModularity
             
             if(area_global_ID==keyValue->second)
             {
-                return true;
+                return 1;
             }
-            return false;
+            return 0;
         };
         
-    std::unique_ptr<NodeToNodeQuestionStructure<std::uint64_t,bool>> adjacency_results;
-    adjacency_results = std::move(node_to_node_question<std::uint64_t,bool>
+    std::unique_ptr<NodeToNodeQuestionStructure<std::uint64_t,std::uint8_t>> adjacency_results;
+    adjacency_results = std::move(node_to_node_question<std::uint64_t,std::uint8_t>
                             (graph,MPI_UINT64_T,collect_adjacency_area_info,
-                                   MPI_CXX_BOOL,test_for_adjacent_equal_Area));
+                                   MPI_UINT8_T,test_for_adjacent_equal_Area));
     
     std::uint64_t local_adjacency_sum = 0;
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
     {
-        std::unique_ptr<std::vector<bool>> this_node_adjacency_results;
+        std::unique_ptr<std::vector<std::uint8_t>> this_node_adjacency_results;
         this_node_adjacency_results = adjacency_results->getAnswersOfQuestionerNode(node_local_ind);
         
         for(int i=0;i<this_node_adjacency_results->size();i++)
         {
-            local_adjacency_sum += 1*(*this_node_adjacency_results)[i];
+            local_adjacency_sum += (*this_node_adjacency_results)[i];
         }
     }
     std::uint64_t global_adjacency_sum = MPIWrapper::all_reduce<std::uint64_t>(local_adjacency_sum,MPI_UINT64_T,MPI_SUM);
@@ -888,8 +888,9 @@ double GraphProperty::computeModularity
             local_areaGlobalID_to_node.push_back({});
             local_areaGlobalID_to_node.back().resize(total_size);
         }
-        MPIWrapper::gather<nodeModularityInfo>(areaGlobalID_to_node[area_global_ID].data(),local_areaGlobalID_to_node.back().data(),
-                                               area_local_size,MPIWrapper::MPI_nodeModularityInfo,calculationRank);
+        MPIWrapper::gather<nodeModularityInfo>(areaGlobalID_to_node[area_global_ID].data(),
+                                               local_areaGlobalID_to_node.back().data(),area_local_size,
+                                               MPIWrapper::MPI_nodeModularityInfo,calculationRank);
     }
     std::uint64_t local_in_out_degree_node_sum = 0;
     for(std::vector<nodeModularityInfo>& nodes_of_area : local_areaGlobalID_to_node)

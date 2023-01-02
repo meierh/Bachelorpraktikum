@@ -13,6 +13,7 @@
 #include <iostream>
 
 #include "Edge.h"
+//#include "GraphProperty.h"
 
 inline int do_nothing(void*) {
 	return 0;
@@ -112,6 +113,17 @@ class MPIWrapper {
 			&MPI_OutEdge
 		);
 		MPI_Type_commit(&MPI_OutEdge);
+		
+		//MPI Type for threeMotifStructure
+		MPI_Type_commit(&MPI_InEdge);
+		
+		//MPI Type for threeMotifStructure
+		MPI_Type_contiguous(7,MPI_UINT64_T,&MPI_threeMotifStructure);
+		MPI_Type_commit(&MPI_threeMotifStructure);
+		
+		//MPI Type for nodeModularityInfo 
+		MPI_Type_contiguous(3,MPI_UINT64_T,&MPI_nodeModularityInfo);
+		MPI_Type_commit(&MPI_nodeModularityInfo);
 	}
 
 public:

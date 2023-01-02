@@ -173,7 +173,7 @@ private:
         std::uint64_t node_2_local;
         std::uint64_t node_3_rank;
         std::uint64_t node_3_local;
-        std::uint16_t motifTypeBitArray;
+        std::uint64_t motifTypeBitArray;
         
         void setMotifTypes(std::vector<int> motifTypes)
         {
