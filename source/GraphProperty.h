@@ -100,12 +100,16 @@ private:
     template<typename Q_parameter,typename A_parameter>
     class NodeToNodeQuestionStructure{
         public:
-            void addAddresseesAndParameterFromOneNode
+        //Funktions for use on questioner rank side
+            void addQuestionsFromOneNodeToSend
             (
-                std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>> list_of_adressees_and_parameter,
+                std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>> list_of_adressees_and_parameter,
                 std::uint64_t questioner
             );
-            void setQuestionsAndParameterRecv
+            void finalizeAddingQuestionsToSend();
+
+        //Funktions for use on answerer rank side
+            void setQuestionsReceived
             (
                 std::vector<std::uint64_t>& total_nodes_to_ask_question,
                 std::vector<Q_parameter>& total_question_parameters,
@@ -127,17 +131,18 @@ private:
             (
                 std::uint64_t node_local_ind
             );
-            std::vector<int>& get_ranks_to_nbrOfQuestions(const int number_ranks);
+            std::vector<int>& get_adressee_ranks_to_nbrOfQuestions();
             std::vector<std::uint64_t>& get_nodes_to_ask_question_for_rank(std::uint64_t rank);
             std::vector<Q_parameter>& get_question_parameters_for_rank(std::uint64_t rank);
             std::vector<A_parameter>& get_answers_for_rank(std::uint64_t ranks);
+            
         private:
             // stores index in nodes_to_ask_question for each rank
             std::unordered_map<std::uint64_t,std::uint64_t> rank_to_outerIndex;
             // list of list of nodes to ask questions 
             std::vector<std::vector<std::uint64_t>> nodes_to_ask_question;
             // list of ranks coresponding to nodes_to_ask_question
-            std::vector<std::uint64_t> rank_of_list_index;
+            std::vector<std::uint64_t> list_index_to_adressee_rank;
             // list of list of nodes that ask the questions coresponding to nodes_to_ask_question
             std::vector<std::vector<std::uint64_t>> nodes_that_ask_the_question;
             // stores index in nodes_to_ask_question for each rank
@@ -145,14 +150,16 @@ private:
             // list of list of parameters coresponding to nodes_to_ask_question
             std::vector<std::vector<Q_parameter>> question_parameters;
             // list of all ranks to number of questions
-            std::vector<int> ranks_to_nbrOfQuestions;
+            std::vector<int> addressee_ranks_to_nbrOfQuestions;
             // list of list of answers coresponding to nodes_to_ask_question
             std::vector<std::vector<A_parameter>> answers_to_questions;
-            
+                        
             std::vector<std::uint64_t> dummy_nodes_to_ask_question;
             std::vector<Q_parameter> dummy_question_parameters;
             std::vector<A_parameter> dummy_answers_to_questions;
-
+            
+            enum StatusType {Empty,PrepareQuestionsToSend,PrepareQuestionsRecv,ClosedQuestionsPreparation};
+            StatusType structureStatus = Empty;
     };
     
     template<typename Q_parameter,typename A_parameter>
@@ -160,7 +167,7 @@ private:
     (
         const DistributedGraph& graph,
         MPI_Datatype MPI_Q_parameter,
-        std::function<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>(const DistributedGraph& dg,std::uint64_t node_local_ind)> generateAddressees,
+        std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>>(const DistributedGraph& dg,std::uint64_t node_local_ind)> generateAddressees,
         MPI_Datatype MPI_A_parameter,
         std::function<A_parameter(const DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
     );

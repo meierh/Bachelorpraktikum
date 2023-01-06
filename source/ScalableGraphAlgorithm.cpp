@@ -198,13 +198,18 @@ void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 	std::unique_ptr<GraphProperty::AreaConnecMap> areaConnect;
 	std::unique_ptr<GraphProperty::Histogram> histogramCountBins;
 	std::unique_ptr<GraphProperty::Histogram> histogramWidthBins;
+	std::vector<double> motifFraction; 
 	try{
-		areaConnect = GraphProperty::areaConnectivityStrength(dg);
-		histogramCountBins = GraphProperty::edgeLengthHistogramm_constBinCount(dg,50);
-		histogramWidthBins =  GraphProperty::edgeLengthHistogramm_constBinWidth(dg,2.0);
+		//areaConnect = GraphProperty::areaConnectivityStrength(dg);
+		//histogramCountBins = GraphProperty::edgeLengthHistogramm_constBinCount(dg,50);
+		//histogramWidthBins =  GraphProperty::edgeLengthHistogramm_constBinWidth(dg,2.0);
+		motifFraction = GraphProperty::networkTripleMotifs(dg);
 		if (my_rank == 0) 
 		{
-			std::cout << "The total number of connectivity in the graph is: " << histogramCountBins->size() << '\n';
+			std::cout << "Motifs"<< '\n';
+			for(int motifFrac:motifFraction)
+				std::cout <<motifFrac<<"   ";
+			std::cout <<'\n';
 			fflush(stdout);
 		}
 	}
