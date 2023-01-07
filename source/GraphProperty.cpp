@@ -612,8 +612,11 @@ std::vector<double> GraphProperty::networkTripleMotifs
         evaluate_correct_networkMotifs_oneNode = 
                 [](const DistributedGraph& dg,std::uint64_t node_local_ind,threeMotifStructure possible_motif)
         {
-            assert(node_local_ind==possible_motif.node_2_local);
             const int my_rank = MPIWrapper::get_my_rank();
+            
+            if(!(node_local_ind==possible_motif.node_2_local))
+                std::cout<<"node_local_ind:"<<node_local_ind<<"   possible_motif.node_2_local:"<<possible_motif.node_2_local<<"   my_rank:"<<my_rank<<"   possible_motif.node_2_rank:"<<possible_motif.node_2_rank<<std::endl;
+            assert(node_local_ind==possible_motif.node_2_local);
             assert(my_rank==possible_motif.node_2_rank);
             
             const std::vector<OutEdge>& oEdges = dg.get_out_edges(my_rank,node_local_ind);
@@ -668,8 +671,9 @@ std::vector<double> GraphProperty::networkTripleMotifs
                 //maintain motifs 1,2,3,4,6,9
                 possible_motif.unsetMotifTypes({5,7,8,10,11,12,13});
             }
-            assert(possible_motif.checkValidity());
             
+            assert(possible_motif.checkValidity());
+                        
             return possible_motif;
         };
     
@@ -729,6 +733,7 @@ std::vector<double> GraphProperty::networkTripleMotifs
     return motifFraction;
 }
 
+/*
 double GraphProperty::computeModularity
 (
     const DistributedGraph& graph
@@ -811,7 +816,7 @@ double GraphProperty::computeModularity
     }
     
     //Create rank local area distance sum
-    std::function<std::vector<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>>
+    std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>>>
                  (const DistributedGraph& dg,std::uint64_t node_local_ind)>
         collect_adjacency_area_info = [&](const DistributedGraph& dg,std::uint64_t node_local_ind)
         {
@@ -822,14 +827,14 @@ double GraphProperty::computeModularity
             assert(keyValue!=area_names_map.end()); 
             std::uint64_t area_global_ID = keyValue->second;
             
-            std::vector<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>> outward_node_area;
+            auto outward_node_area = std::make_unique<std::vector<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>>>();
             
             const std::vector<OutEdge>& oEdges = dg.get_out_edges(my_rank,node_local_ind);
             for(const OutEdge& oEdge : oEdges)
             {
                 std::uint64_t rank = oEdge.target_rank;
                 std::uint64_t id = oEdge.target_id;
-                outward_node_area.push_back(std::tie<std::uint64_t,std::uint64_t,std::uint64_t>
+                outward_node_area->push_back(std::tie<std::uint64_t,std::uint64_t,std::uint64_t>
                                                         (rank,id,area_global_ID));
             }
             return outward_node_area;
@@ -928,6 +933,7 @@ double GraphProperty::computeModularity
 
     return (double)global_adjacency_sum/(double)(global_m*global_m) + (double)global_in_out_degree_node_sum/(double)(global_m);
 }
+*/
 
 std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
 (
@@ -1302,13 +1308,28 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
     }
     questioner_structure->finalizeAddingQuestionsToSend();
     
+    for(int index=0; index<questioner_structure->list_index_to_adressee_rank.size(); index++)
+    {
+        int targetRank = questioner_structure->list_index_to_adressee_rank[index];
+        for(int j=0;j<questioner_structure->nodes_to_ask_question[index].size();j++)
+        {
+            int targetNode = questioner_structure->nodes_to_ask_question[index][j];
+            int sourceNode = questioner_structure->nodes_that_ask_the_question[index][j];
+            threeMotifStructure struc = questioner_structure->question_parameters[index][j];
+            assert(struc.node_1_rank==my_rank);
+            assert(struc.node_1_local==sourceNode);
+            assert(struc.node_2_rank==targetRank);
+            assert(struc.node_2_local==targetNode);
+        }
+    }
+    
     std::cout<<"Line 1103 from process:"<<my_rank<<std::endl;
     
     // Distribute number of questions to each rank
     std::vector<int>& send_ranks_to_nbrOfQuestions = questioner_structure->get_adressee_ranks_to_nbrOfQuestions();
     
     MPIWrapper::barrier();
-    std::cout<<"Rank:"<<my_rank<<"  ";
+    std::cout<<"send_ranks_to_nbrOfQuestions  Rank:"<<my_rank<<"  ";
     for(int nbrToRank: send_ranks_to_nbrOfQuestions)
     {
         std::cout<<nbrToRank<<"  ";
@@ -1334,7 +1355,10 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
     
     // Distribute questions to each rank
     std::vector<int> recv_ranks_to_nbrOfQuestions(number_ranks);
-    std::memcpy(recv_ranks_to_nbrOfQuestions.data(),&global_ranks_to_nbrOfQuestions[my_rank*number_ranks],number_ranks*sizeof(int));
+    for(int rank=0;rank<recv_ranks_to_nbrOfQuestions.size();rank++)
+    {
+        recv_ranks_to_nbrOfQuestions[rank] = global_ranks_to_nbrOfQuestions[rank*number_ranks+my_rank];
+    }
     std::vector<int> displ_recv_ranks_to_nbrOfQuestions(number_ranks,0);
     for(int index = 1;index<displ_recv_ranks_to_nbrOfQuestions.size();index++)
     {
@@ -1351,8 +1375,34 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
             questioner_structure->get_nodes_to_ask_question_for_rank(rank);
         std::vector<Q_parameter>& question_parameters_for_rank =
             questioner_structure->get_question_parameters_for_rank(rank);
-        
+        assert(nodes_to_ask_question_for_rank.size()==question_parameters_for_rank.size());
         int count = nodes_to_ask_question_for_rank.size();
+        
+        for(int j=0;j<nodes_to_ask_question_for_rank.size();j++)
+        {
+            int targetNode = nodes_to_ask_question_for_rank[j];
+            threeMotifStructure struc = question_parameters_for_rank[j];
+            assert(struc.node_1_rank==my_rank);
+            assert(struc.node_2_rank==rank);
+            assert(struc.node_2_local==targetNode);
+        }
+        
+        
+        MPIWrapper::barrier();
+        std::cout<<"Rank:"<<my_rank<<" - "<<count<<std::endl;
+        fflush(stdout);
+        MPIWrapper::barrier();
+        if(my_rank==rank)
+        {
+            std::cout<<"Rank:"<<my_rank<<" -- ";
+            for(int nbrToRank: recv_ranks_to_nbrOfQuestions)
+            {
+                std::cout<<nbrToRank<<"  ";
+            }
+            std::cout<<std::endl;
+        }
+        fflush(stdout);
+        MPIWrapper::barrier();
         
         MPIWrapper::gatherv<std::uint64_t>(nodes_to_ask_question_for_rank.data(), count,
                                            my_rank_total_nodes_to_ask_question.data(),
@@ -1367,19 +1417,20 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
     std::cout<<"Line 1150 from process:"<<my_rank<<std::endl;
     fflush(stdout);
     MPIWrapper::barrier();
-    throw std::string("1180");
-    
+    //throw std::string("1419");
+
     // Create Adressees structure
     GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter> adressee_structure;
     adressee_structure.setQuestionsReceived(my_rank_total_nodes_to_ask_question,my_rank_total_question_parameters,
                                             recv_ranks_to_nbrOfQuestions,displ_recv_ranks_to_nbrOfQuestions);
     
-    std::cout<<"Line 1159 from process:"<<my_rank<<std::endl;
-    
     // Compute the answers
     adressee_structure.computeAnswersToQuestions(graph,generateAnswers);
     
-    std::cout<<"Line 1164 from process:"<<my_rank<<std::endl;
+    MPIWrapper::barrier();
+    std::cout<<"Line 1405 from process:"<<my_rank<<std::endl;
+    fflush(stdout);
+    MPIWrapper::barrier();
     
     // Distribute answers to each rank
     std::vector<int>& send_ranks_to_nbrOfAnswers =  questioner_structure->get_adressee_ranks_to_nbrOfQuestions();
@@ -1489,6 +1540,7 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::setQue
     std::vector<int>& rank_displ
 )
 {
+    assert(rank_size.size()==rank_displ.size());
     for(int rank=0;rank<rank_size.size();rank++)
     {
         int nbr_of_questions = rank_size[rank];
@@ -1496,18 +1548,28 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::setQue
         {
             int outerIndex = list_index_to_adressee_rank.size();
             rank_to_outerIndex.insert(std::pair<std::uint64_t,std::uint64_t>(rank,outerIndex));
+            
+            assert(outerIndex==nodes_to_ask_question.size());
+            assert(rank_displ[rank]<total_nodes_to_ask_question.size() && rank_displ[rank]>=0);
+            
+            list_index_to_adressee_rank.push_back(rank);
             nodes_to_ask_question.push_back({});
             nodes_to_ask_question.back().resize(nbr_of_questions);
-            std::memcpy(&nodes_to_ask_question[outerIndex],&total_nodes_to_ask_question[rank_displ[rank]],nbr_of_questions);
-            list_index_to_adressee_rank.push_back(rank);
+            assert(nodes_to_ask_question.back().size()==nbr_of_questions);
+            assert(rank_displ[rank]>=0 && rank_displ[rank]<total_nodes_to_ask_question.size());
+            std::memcpy(nodes_to_ask_question.back().data(),&total_nodes_to_ask_question[rank_displ[rank]],                        nbr_of_questions*sizeof(std::uint64_t));
             
             question_parameters.push_back({});
             question_parameters.back().resize(nbr_of_questions);
-            std::memcpy(&question_parameters[outerIndex],&total_question_parameters[rank_displ[rank]],nbr_of_questions);
+            assert(outerIndex<question_parameters.size());
+            assert(rank_displ[rank]<total_question_parameters.size() && rank_displ[rank]>=0);
+            assert(nbr_of_questions<=question_parameters[outerIndex].size());
+            std::memcpy(question_parameters.back().data(),&total_question_parameters[rank_displ[rank]],nbr_of_questions*sizeof(Q_parameter));
             
             addressee_ranks_to_nbrOfQuestions.push_back(nbr_of_questions);
         }
     }
+    //throw std::string("1544");
 }
 
 template<typename Q_parameter,typename A_parameter>
@@ -1541,12 +1603,12 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::comput
     std::function<A_parameter(const DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
 )
 {
-    assert(nodes_that_ask_the_question.size()==question_parameters.size());
+    assert(nodes_to_ask_question.size()==question_parameters.size());
     answers_to_questions.resize(question_parameters.size());
     for(int i=0; i<question_parameters.size(); i++)
     {
-        assert(nodes_that_ask_the_question[i].size()==question_parameters[i].size());
-        answers_to_questions[i].resize(question_parameters.size());
+        assert(nodes_to_ask_question[i].size()==question_parameters[i].size());
+        answers_to_questions[i].resize(question_parameters[i].size());
         for(int j=0; j<question_parameters[i].size(); j++)
         {
             std::uint64_t node_local_ind = nodes_to_ask_question[i][j];
@@ -1570,16 +1632,13 @@ std::vector<std::uint64_t>& GraphProperty::NodeToNodeQuestionStructure<Q_paramet
 )
 {
     auto keyValue = rank_to_outerIndex.find(ranks);
-    if(keyValue!=rank_to_outerIndex.end() && nodes_that_ask_the_question.size()!=0)
+    if(keyValue!=rank_to_outerIndex.end() && nodes_to_ask_question.size()!=0)
     {
         std::uint64_t outerIndex = keyValue->second;
-        assert(outerIndex<nodes_that_ask_the_question.size());
-        return nodes_that_ask_the_question[outerIndex];
+        assert(outerIndex<nodes_to_ask_question.size());
+        return nodes_to_ask_question[outerIndex];
     }
-    else
-    {
-        return dummy_nodes_to_ask_question;
-    }
+    return dummy_nodes_to_ask_question;
 }
 
 template<typename Q_parameter,typename A_parameter>
@@ -1589,16 +1648,13 @@ std::vector<Q_parameter>& GraphProperty::NodeToNodeQuestionStructure<Q_parameter
 )
 {
     auto keyValue = rank_to_outerIndex.find(ranks);
-    if(keyValue!=rank_to_outerIndex.end())
+    if(keyValue!=rank_to_outerIndex.end() && question_parameters.size()!=0)
     {
         std::uint64_t outerIndex = keyValue->second;
         assert(outerIndex<question_parameters.size());
         return question_parameters[outerIndex];
     }
-    else
-    {
-        return dummy_question_parameters;
-    }
+    return dummy_question_parameters;
 }
 
 template<typename Q_parameter,typename A_parameter>
@@ -1670,8 +1726,7 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::finali
     {
         std::uint64_t rank = list_index_to_adressee_rank[index];
         assert(rank<number_ranks);
-        int a = nodes_to_ask_question[index].size();
-        addressee_ranks_to_nbrOfQuestions[rank] = a;
+        addressee_ranks_to_nbrOfQuestions[rank] = nodes_to_ask_question[index].size();
     }
 
     for(std::uint64_t list_nbrToRank: addressee_ranks_to_nbrOfQuestions)
@@ -1680,5 +1735,26 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::finali
     }
     
     structureStatus = ClosedQuestionsPreparation;
+    
+    
+    // Testing
+    for(int index=0; index<list_index_to_adressee_rank.size(); index++)
+    {
+        int targetRank = list_index_to_adressee_rank[index];
+        for(int j=0;j<nodes_to_ask_question[index].size();j++)
+        {
+            int targetNode = nodes_to_ask_question[index][j];
+            int sourceNode = nodes_that_ask_the_question[index][j];
+            threeMotifStructure struc = question_parameters[index][j];
+            assert(struc.node_1_rank==MPIWrapper::get_my_rank());
+            assert(struc.node_1_local==sourceNode);
+            assert(struc.node_2_rank==targetRank);
+            assert(struc.node_2_local==targetNode);
+        }
+        auto keyValue = rank_to_outerIndex.find(targetRank);
+        assert(keyValue!=rank_to_outerIndex.end());
+        std::uint64_t outerIndex = keyValue->second;
+        assert(outerIndex==index);
+    }
 }
 
