@@ -684,7 +684,12 @@ std::vector<double> GraphProperty::networkTripleMotifs
                             (graph,MPIWrapper::MPI_threeMotifStructure,collect_possible_networkMotifs_oneNode,
                                    MPIWrapper::MPI_threeMotifStructure,evaluate_correct_networkMotifs_oneNode));
     
+    MPIWrapper::barrier();
     std::cout<<"Line 681 from process:"<<my_rank<<std::endl;
+    fflush(stdout);
+    MPIWrapper::barrier();
+    //throw std::string("619");
+
 
     std::vector<std::uint64_t> motifTypeCount(14,0);
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
@@ -703,14 +708,26 @@ std::vector<double> GraphProperty::networkTripleMotifs
         }
     }
     
+    MPIWrapper::barrier();
+    std::cout<<"Line 712 from process:"<<my_rank<<std::endl;
+    fflush(stdout);
+    MPIWrapper::barrier();
+    throw std::string("712");
+    
     std::vector<std::uint64_t> motifTypeCountTotal;
     if(my_rank==resultToRank)
     {
         motifTypeCountTotal.resize(14);
     }
-    
     MPIWrapper::reduce<std::uint64_t>(motifTypeCount.data(),motifTypeCountTotal.data(),                                      
                                       14,MPI_UINT64_T,MPI_SUM,resultToRank);
+
+    MPIWrapper::barrier();
+    std::cout<<"Line 726 from process:"<<my_rank<<std::endl;
+    fflush(stdout);
+    MPIWrapper::barrier();
+    throw std::string("726");
+    
     if(my_rank==resultToRank)
     {
         //Rotational invariant motifs where counted three times each
@@ -730,6 +747,11 @@ std::vector<double> GraphProperty::networkTripleMotifs
             motifFraction[motifType] = (double)motifTypeCountTotal[motifType] / (double)total_number_of_motifs;
         }
     }
+    MPIWrapper::barrier();
+    std::cout<<"Line 751 from process:"<<my_rank<<std::endl;
+    fflush(stdout);
+    MPIWrapper::barrier();
+    throw std::string("751");
     return motifFraction;
 }
 
@@ -1472,7 +1494,6 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
     std::cout<<"Line 1473 from process:"<<my_rank<<std::endl;
     fflush(stdout);
     MPIWrapper::barrier();
-    throw std::string("1476");
     
     questioner_structure->setAnswers(my_rank_total_answer_parameters,send_ranks_to_nbrOfAnswers,
                                     displ_send_ranks_to_nbrOfAnswers);
@@ -1481,7 +1502,7 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
     std::cout<<"Line 1482 from process:"<<my_rank<<std::endl;
     fflush(stdout);
     MPIWrapper::barrier();
-    throw std::string("1485");
+    //throw std::string("1485");
     
     return std::move(questioner_structure);
 }
@@ -1605,6 +1626,20 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::setAns
     std::vector<int>& rank_displ
 )
 {
+    int number_answer_blocks = 0;
+    for(int rank=0;rank<rank_size.size();rank++)
+    {
+        if(rank_size[rank]>0)
+        {
+            number_answer_blocks++;
+        }
+    }
+    assert(number_answer_blocks==nodes_to_ask_question.size());
+    assert(number_answer_blocks==list_index_to_adressee_rank.size());
+    assert(number_answer_blocks==nodes_that_ask_the_question.size());
+    assert(number_answer_blocks==question_parameters.size());
+    
+    answers_to_questions.resize(number_answer_blocks);
     for(int rank=0;rank<rank_size.size();rank++)
     {
         int nbr_of_answers = rank_size[rank];
@@ -1613,10 +1648,19 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::setAns
             auto keyValue = rank_to_outerIndex.find(rank);
             assert(keyValue!=rank_to_outerIndex.end());
             int outerIndex = keyValue->second;
+            assert(outerIndex<answers_to_questions.size() && outerIndex>=0);
+            assert(answers_to_questions[outerIndex].size()==0);
+            assert(nbr_of_answers==nodes_to_ask_question[outerIndex].size());
+            assert(nbr_of_answers==nodes_that_ask_the_question[outerIndex].size());
+            assert(nbr_of_answers==question_parameters[outerIndex].size());            answers_to_questions[outerIndex].resize(nbr_of_answers);
             
-            answers_to_questions.push_back({});
-            answers_to_questions.back().resize(nbr_of_answers);
-            std::memcpy(&answers_to_questions[outerIndex],&total_answers[rank_displ[rank]],nbr_of_answers);
+            /*
+            for(int i=0;i<nbr_of_answers;i++)
+            {
+                answers_to_questions[outerIndex][i] = total_answers[rank_displ[rank]+i];
+            }
+            */
+            std::memcpy(answers_to_questions[outerIndex].data(),&total_answers[rank_displ[rank]],nbr_of_answers*sizeof(A_parameter));
         }
     }
 }
@@ -1693,7 +1737,7 @@ std::vector<A_parameter>& GraphProperty::NodeToNodeQuestionStructure<Q_parameter
     if(keyValue!=rank_to_outerIndex.end() && answers_to_questions.size()!=0)
     {
         std::uint64_t outerIndex = keyValue->second;
-        assert(outerIndex<nodes_that_ask_the_question.size());
+        assert(outerIndex<answers_to_questions.size());
         return answers_to_questions[outerIndex];
     }
     else
