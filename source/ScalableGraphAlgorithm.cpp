@@ -198,7 +198,7 @@ void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 	std::unique_ptr<GraphProperty::AreaConnecMap> areaConnect;
 	std::unique_ptr<GraphProperty::Histogram> histogramCountBins;
 	std::unique_ptr<GraphProperty::Histogram> histogramWidthBins;
-	std::vector<double> motifFraction; 
+	std::vector<long double> motifFraction; 
 	try{
 		//areaConnect = GraphProperty::areaConnectivityStrength(dg);
 		//histogramCountBins = GraphProperty::edgeLengthHistogramm_constBinCount(dg,50);

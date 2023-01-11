@@ -55,7 +55,7 @@ public:
         unsigned int resultToRank=0
     );
     
-    static std::vector<double> networkTripleMotifs
+    static std::vector<long double> networkTripleMotifs
     (
         const DistributedGraph& graph,
         unsigned int resultToRank = 0

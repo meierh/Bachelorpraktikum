@@ -493,7 +493,7 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
     return std::move(edgeLengthHistogramm(graph,bin_count_histogram_creator,resultToRank));
 }
 
-std::vector<double> GraphProperty::networkTripleMotifs
+std::vector<long double> GraphProperty::networkTripleMotifs
 (
     const DistributedGraph& graph,
     unsigned int resultToRank
@@ -700,6 +700,7 @@ std::vector<double> GraphProperty::networkTripleMotifs
         for(int i=0;i<this_node_motifs_results->size();i++)
         {
             threeMotifStructure& one_motif = (*this_node_motifs_results)[i];
+            assert(one_motif.checkValidity());
             for(int motifType=1;motifType<14;motifType++)
             {
                 if(one_motif.isMotifTypeSet(motifType))
@@ -712,7 +713,7 @@ std::vector<double> GraphProperty::networkTripleMotifs
     std::cout<<"Line 712 from process:"<<my_rank<<std::endl;
     fflush(stdout);
     MPIWrapper::barrier();
-    throw std::string("712");
+    //throw std::string("712");
     
     std::vector<std::uint64_t> motifTypeCountTotal;
     if(my_rank==resultToRank)
@@ -726,7 +727,7 @@ std::vector<double> GraphProperty::networkTripleMotifs
     std::cout<<"Line 726 from process:"<<my_rank<<std::endl;
     fflush(stdout);
     MPIWrapper::barrier();
-    throw std::string("726");
+    //throw std::string("726");
     
     if(my_rank==resultToRank)
     {
@@ -736,7 +737,7 @@ std::vector<double> GraphProperty::networkTripleMotifs
         assert(motifTypeCountTotal[13]%3==0);
         motifTypeCountTotal[13]/=3;        
     }
-    std::vector<double> motifFraction;
+    std::vector<long double> motifFraction;
     if(my_rank==resultToRank)
     {
         std::uint64_t total_number_of_motifs = std::accumulate(motifTypeCountTotal.begin(),motifTypeCountTotal.end(),0);
@@ -744,14 +745,15 @@ std::vector<double> GraphProperty::networkTripleMotifs
         motifFraction[0] = total_number_of_motifs;
         for(int motifType=1;motifType<14;motifType++)
         {
-            motifFraction[motifType] = (double)motifTypeCountTotal[motifType] / (double)total_number_of_motifs;
+            motifFraction[motifType] = motifTypeCountTotal[motifType];
+            //motifFraction[motifType] = static_cast<long double>(motifTypeCountTotal[motifType]) / static_cast<long double>(total_number_of_motifs);
         }
     }
     MPIWrapper::barrier();
     std::cout<<"Line 751 from process:"<<my_rank<<std::endl;
     fflush(stdout);
     MPIWrapper::barrier();
-    throw std::string("751");
+    //throw std::string("751");
     return motifFraction;
 }
 
@@ -1754,11 +1756,14 @@ std::unique_ptr<std::vector<A_parameter>> GraphProperty::NodeToNodeQuestionStruc
 {
     auto answers = std::make_unique<std::vector<A_parameter>>();
     for(auto keyValue = questioner_node_to_outerIndex_and_innerIndex.find(node_local_ind);
-        keyValue->first == node_local_ind;
+        keyValue!=questioner_node_to_outerIndex_and_innerIndex.end() && keyValue->first == node_local_ind;
         keyValue++)
     {
+        
         std::uint64_t outerIndex = keyValue->second.first;
+        assert(outerIndex<answers_to_questions.size() && outerIndex>=0);
         std::uint64_t innerIndex = keyValue->second.second;
+        assert(innerIndex<answers_to_questions[outerIndex].size() && innerIndex>=0);
         answers->push_back(answers_to_questions[outerIndex][innerIndex]);
     }
     return std::move(answers);
