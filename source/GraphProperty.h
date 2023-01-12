@@ -5,6 +5,7 @@
 #include <numeric>
 #include <unordered_map>
 #include <unordered_set>
+#include <algorithm>
 #include <cassert>  // debug
 
 class GraphProperty {
@@ -61,7 +62,7 @@ public:
         unsigned int resultToRank = 0
     );
     
-    double computeModularity
+    static double computeModularity
     (
         const DistributedGraph& graph
     );
@@ -167,11 +168,45 @@ private:
     template<typename Q_parameter,typename A_parameter>
     static std::unique_ptr<NodeToNodeQuestionStructure<Q_parameter,A_parameter>> node_to_node_question
     (
-        const DistributedGraph& graph,
-        MPI_Datatype MPI_Q_parameter,
-        std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>>(const DistributedGraph& dg,std::uint64_t node_local_ind)> generateAddressees,
-        MPI_Datatype MPI_A_parameter,
-        std::function<A_parameter(const DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
+        const DistributedGraph&,
+        MPI_Datatype,
+        std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>>(const DistributedGraph& dg,std::uint64_t node_local_ind)>,
+        MPI_Datatype,
+        std::function<A_parameter(const DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)>
+    );
+    
+    template<typename DATA,typename DATA_Element>
+    static std::unique_ptr<std::vector<std::vector<DATA>>> gather_Data_to_one_Rank
+    (
+        const DistributedGraph&,
+        std::function<std::unique_ptr<std::vector<std::pair<DATA,int>>>(const DistributedGraph& dg)>,
+        std::function<std::vector<DATA_Element>(DATA dat)>,
+        std::function<DATA(std::vector<DATA_Element>&)>,
+        MPI_Datatype,
+        int    
+    );
+    
+    template<typename DATA,typename DATA_Element>
+    static std::unique_ptr<std::vector<std::vector<DATA>>> gather_Data_to_all_Ranks
+    (
+        const DistributedGraph&,
+        std::function<std::unique_ptr<std::vector<std::pair<DATA,int>>>(const DistributedGraph& dg)>,
+        std::function<std::vector<DATA_Element>(DATA dat)>,
+        std::function<DATA(std::vector<DATA_Element>&)>,
+        MPI_Datatype
+    );
+    
+    template<typename DATA,typename DATA_Element>
+    static std::unique_ptr<std::vector<std::vector<DATA>>> gather_Data
+    (
+        const DistributedGraph&,
+        std::function<std::unique_ptr<std::vector<std::pair<DATA,int>>>(const DistributedGraph& )>,
+        std::function<std::vector<DATA_Element>(DATA)>,
+        std::function<DATA(std::vector<DATA_Element>&)>,
+        std::function<void(DATA_Element*,int,DATA_Element*,int*,int*,MPI_Datatype,int)>,
+        std::function<void(int*,int,int*,int*,int*,int)>,
+        MPI_Datatype,
+        int
     );
     
     typedef struct

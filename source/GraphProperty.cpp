@@ -757,7 +757,6 @@ std::vector<long double> GraphProperty::networkTripleMotifs
     return motifFraction;
 }
 
-/*
 double GraphProperty::computeModularity
 (
     const DistributedGraph& graph
@@ -768,66 +767,36 @@ double GraphProperty::computeModularity
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
     const std::vector<std::string>& area_names = graph.get_local_area_names();
 
-    // Find maximum name length
-    int maxLengthName = std::max_element(area_names.begin(), area_names.end(),
-                                               [](std::string a, std::string b) {return a.size() < b.size();}
-                                               )->size();
-    int global_maxLength_Name = MPIWrapper::all_reduce<int>(maxLengthName,MPI_INT,MPI_MAX);
-    
-    // Distribute number of names per rank to all ranks
-    std::vector<int> global_number_of_names(number_ranks);
-    int local_number_names = area_names.size();
-    MPIWrapper::all_gather<int>(&local_number_names, global_number_of_names.data(), 1, MPI_INT);
-    
-    // Distribute length of names in all ranks to all ranks
-    std::vector<int> global_sizes_of_names(std::accumulate(global_number_of_names.begin(),global_number_of_names.end(),0));
-    std::vector<int> global_sizes_of_names_displ(number_ranks);
-    std::partial_sum(global_number_of_names.begin(), global_number_of_names.end()-1,
-                     global_sizes_of_names_displ.begin()+1, std::plus<int>());
-    std::vector<int> local_sizes_of_names(area_names.size());
-    std::transform(area_names.cbegin(),area_names.cend(),local_sizes_of_names.begin(),
-                   [](std::string s){return s.size();});
-    MPIWrapper::all_gatherv<int>(local_sizes_of_names.data(),local_number_names,
-                                 global_sizes_of_names.data(),global_number_of_names.data(),
-                                 global_sizes_of_names_displ.data(), MPI_INT);
-    
-    // Distribute characters of names in all ranks to all ranks
-    std::vector<char> global_char_of_names(std::accumulate(global_sizes_of_names.begin(),global_sizes_of_names.end(),0));
-    std::vector<int> global_char_of_names_displ(number_ranks);
-    std::vector<int> global_sizes_of_char(number_ranks);
-    int displacement = 0;
-    for(int i=0;i<global_sizes_of_names_displ.size()-1;i++)
-    {
-        global_char_of_names_displ[i]=displacement;
-        global_sizes_of_char[i]=std::accumulate(global_sizes_of_names.begin()+global_sizes_of_names_displ[i],
-                                                global_sizes_of_names.begin()+global_sizes_of_names_displ[i+1],0);
-        displacement+=global_sizes_of_char[i];
-    }
-    std::vector<char> local_char_of_names;
-    std::for_each(area_names.cbegin(),area_names.cend(),
-                  [&](std::string s){local_char_of_names.insert(local_char_of_names.cend(),s.cbegin(),s.cend());});
-    MPIWrapper::all_gatherv<char>(local_char_of_names.data(),global_sizes_of_char[my_rank],
-                                 global_char_of_names.data(),global_sizes_of_char.data(),
-                                 global_char_of_names_displ.data(), MPI_CHAR);
-    std::vector<std::vector<std::string>> area_names_list_of_ranks(number_ranks);
-    for(int rank=0;rank<number_ranks;rank++)
-    {
-        int rank_char_begin = global_char_of_names_displ[rank];
-        int rank_number_of_names = global_number_of_names[rank];
-        std::vector<int> rank_sizes_of_names(rank_number_of_names);
-        std::memcpy(rank_sizes_of_names.data(),&global_sizes_of_names[global_sizes_of_names_displ[rank]],
-                    rank_number_of_names*sizeof(int));
-        for(int wordNbr=0;wordNbr<rank_number_of_names;wordNbr++)
+    std::function<std::unique_ptr<std::vector<std::pair<std::string,int>>>(const DistributedGraph&)> 
+        getData = [](const DistributedGraph& dg)
         {
-            std::string name(&global_char_of_names[rank_char_begin],rank_sizes_of_names[wordNbr]);
-            area_names_list_of_ranks[rank].push_back(name);
-        }
-    }
+            const std::vector<std::string>& area_names = dg.get_local_area_names();
+            auto data = std::make_unique<std::vector<std::pair<std::string,int>>>(area_names.size());
+            std::transform(area_names.cbegin(),area_names.cend(),data->begin(),
+                           [](std::string name)
+                            {return std::pair<std::string,int>(name,name.size());});
+            return std::move(data);
+        };
+        
+    std::unique_ptr<std::vector<std::vector<std::string>>> area_names_list_of_ranks = gather_Data_to_all_Ranks<std::string,char>
+    (
+        graph,
+        getData,
+        [](std::string area_name){return std::vector<char>(area_name.cbegin(),area_name.cend());},
+        [](std::vector<char>area_name_v){return std::string(area_name_v.data(),area_name_v.size());},
+        MPI_CHAR
+    );    
+    
+    std::for_each((*area_names_list_of_ranks)[my_rank].cbegin(),
+                  (*area_names_list_of_ranks)[my_rank].cend(),
+                  [](std::string s){std::cout<<s.size();});
+
+    throw std::string("790");
     
     //Create global name indices
     std::unordered_map<std::string,std::uint64_t> area_names_map;
     std::vector<std::string> area_names_list;
-    for(std::vector<std::string>& rank_names : area_names_list_of_ranks)
+    for(std::vector<std::string>& rank_names : *area_names_list_of_ranks)
     {
         for(std::string& name : rank_names)
         {
@@ -949,15 +918,13 @@ double GraphProperty::computeModularity
             }
         }
     }
-    std::uint64_t global_in_out_degree_node_sum = MPIWrapper::all_reduce<std::uint64_t>(local_in_out_degree_node_sum,
-                                                                                        MPI_UINT64_T,MPI_SUM);
+    std::uint64_t global_in_out_degree_node_sum = MPIWrapper::all_reduce<std::uint64_t>(local_in_out_degree_node_sum,MPI_UINT64_T,MPI_SUM);
     
     std::uint64_t local_m = number_local_nodes;
     std::uint64_t global_m = MPIWrapper::all_reduce<std::uint64_t>(local_m,MPI_UINT64_T,MPI_SUM);
 
     return (double)global_adjacency_sum/(double)(global_m*global_m) + (double)global_in_out_degree_node_sum/(double)(global_m);
 }
-*/
 
 std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
 (
@@ -1332,6 +1299,7 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
     }
     questioner_structure->finalizeAddingQuestionsToSend();
     
+    /*
     for(int index=0; index<questioner_structure->list_index_to_adressee_rank.size(); index++)
     {
         int targetRank = questioner_structure->list_index_to_adressee_rank[index];
@@ -1344,8 +1312,10 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
             assert(struc.node_1_local==sourceNode);
             assert(struc.node_2_rank==targetRank);
             assert(struc.node_2_local==targetNode);
+            
         }
     }
+    */
     
     //std::cout<<"Line 1103 from process:"<<my_rank<<std::endl;
     
@@ -1406,15 +1376,17 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
         assert(nodes_to_ask_question_for_rank.size()==question_parameters_for_rank.size());
         int count = nodes_to_ask_question_for_rank.size();
         
+        /*
         for(int j=0;j<nodes_to_ask_question_for_rank.size();j++)
         {
             int targetNode = nodes_to_ask_question_for_rank[j];
+            
             threeMotifStructure struc = question_parameters_for_rank[j];
             assert(struc.node_1_rank==my_rank);
             assert(struc.node_2_rank==rank);
             assert(struc.node_2_local==targetNode);
         }
-        
+        */
         
         /*
         MPIWrapper::barrier();
@@ -1818,6 +1790,7 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::finali
     
     
     // Testing
+    /*
     for(int index=0; index<list_index_to_adressee_rank.size(); index++)
     {
         int targetRank = list_index_to_adressee_rank[index];
@@ -1836,5 +1809,171 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::finali
         std::uint64_t outerIndex = keyValue->second;
         assert(outerIndex==index);
     }
+    */
 }
 
+template<typename DATA,typename DATA_Element>
+std::unique_ptr<std::vector<std::vector<DATA>>> GraphProperty::gather_Data_to_one_Rank
+(
+    const DistributedGraph& dg,
+    std::function<std::unique_ptr<std::vector<std::pair<DATA,int>>>(const DistributedGraph&)> getData,
+    std::function<std::vector<DATA_Element>(DATA)> transformDataToElementary,
+    std::function<DATA(std::vector<DATA_Element>&)> transformElementaryToData,
+    MPI_Datatype DATA_Element_datatype,
+    int root
+)
+{
+    auto dataGatherMethod=[](DATA_Element* src, int count, DATA_Element* dest, int* destCounts,
+                             int* displs, MPI_Datatype datatype,int root)
+    {
+        MPIWrapper::gatherv<DATA_Element>(src,count,dest,destCounts,displs,datatype,root);
+    };
+    
+    auto sizesGatherMethod=[](int* src, int count, int* dest, int* destCounts,
+                              int* displs, int root)
+    {
+        MPIWrapper::gatherv<int>(src,count,dest,destCounts,displs,MPI_INT,root);
+    };
+
+    return std::move(gather_Data<DATA,DATA_Element>(
+        dg,getData,transformDataToElementary,transformElementaryToData,
+        dataGatherMethod,sizesGatherMethod,DATA_Element_datatype,root
+    ));
+}
+
+template<typename DATA,typename DATA_Element>
+std::unique_ptr<std::vector<std::vector<DATA>>> GraphProperty::gather_Data_to_all_Ranks
+(
+    const DistributedGraph& dg,
+    std::function<std::unique_ptr<std::vector<std::pair<DATA,int>>>(const DistributedGraph&)> getData,
+    std::function<std::vector<DATA_Element>(DATA)> transformDataToElementary,
+    std::function<DATA(std::vector<DATA_Element>&)> transformElementaryToData,
+    MPI_Datatype DATA_Element_datatype
+)
+{ 
+    auto dataGatherMethod=[](DATA_Element* src, int count, DATA_Element* dest, int* destCounts,
+                             int* displs, MPI_Datatype datatype,int root)
+    {
+        MPIWrapper::all_gatherv<DATA_Element>(src,count,dest,destCounts,displs,datatype);
+    };
+    
+    auto sizesGatherMethod=[](int* src, int count, int* dest, int* destCounts,
+                              int* displs, int root)
+    {
+        MPIWrapper::all_gatherv<int>(src,count,dest,destCounts,displs,MPI_INT);
+    };
+
+    return std::move(gather_Data<DATA,DATA_Element>(
+        dg,getData,transformDataToElementary,transformElementaryToData,dataGatherMethod,
+        sizesGatherMethod,DATA_Element_datatype,-1)
+    );
+}
+
+template<typename DATA,typename DATA_Element>
+std::unique_ptr<std::vector<std::vector<DATA>>> GraphProperty::gather_Data
+(
+    const DistributedGraph& dg,
+    std::function<std::unique_ptr<std::vector<std::pair<DATA,int>>>(const DistributedGraph& dg)> getData,
+    std::function<std::vector<DATA_Element>(DATA dat)> transformDataToElementary,
+    std::function<DATA(std::vector<DATA_Element>&)> transformElementaryToData,
+    std::function<void(DATA_Element* src, int count, DATA_Element* dest, int* destCounts, int* displs, MPI_Datatype datatype,int root)> dataGatherMethod,
+    std::function<void(int* src, int count, int* dest, int* destCounts, int* displs,int root)> sizesGatherMethod,
+    MPI_Datatype DATA_Element_datatype,
+    int root
+)
+{
+    const int my_rank = MPIWrapper::get_my_rank();
+    const int number_ranks = MPIWrapper::get_number_ranks();
+    int data_target_size = (root==-1 || root==my_rank)?number_ranks:0;
+    
+    //Generate and transform data
+    std::unique_ptr<std::vector<std::pair<DATA,int>>> data = getData(dg);
+    int local_number_data = data->size();
+    std::vector<int> data_inner_size(local_number_data);
+    std::transform(data->begin(),data->end(),data_inner_size.begin(),
+                   [](std::pair<DATA,int> p){return p.second;});
+    std::vector<DATA_Element> local_DATA_Elements;
+    std::for_each(data->cbegin(),data->cend(),
+                  [&](std::pair<DATA,int> p)
+                    { 
+                        std::vector<DATA_Element> vec = transformDataToElementary(p.first);
+                        local_DATA_Elements.insert(local_DATA_Elements.end(),vec.begin(),vec.end());
+                    });
+    int local_DATA_Elements_size = local_DATA_Elements.size();
+    
+    //Gather number of DATA items
+    std::vector<int> global_local_number_data(data_target_size);
+    std::vector<int> destCountNbr(data_target_size,1);
+    std::vector<int> displsNbr(data_target_size,0);
+    if(root==-1 || root==my_rank)
+    {
+        std::partial_sum(destCountNbr.begin(), destCountNbr.end()-1,
+                         displsNbr.begin()+1, std::plus<int>());
+    }
+    sizesGatherMethod(&local_number_data,1,global_local_number_data.data(),destCountNbr.data(),
+                      displsNbr.data(),root);
+    
+    //Gather inner size of data elements
+    std::vector<int> global_data_inner_size;
+    std::vector<int> destCountInnerNbr(data_target_size);
+    std::vector<int> displsInnerNbr(data_target_size,0);
+    if(root==-1 || root==my_rank)
+    {
+        global_data_inner_size.resize(std::accumulate(global_local_number_data.cbegin(),
+                                                      global_local_number_data.cend(),0));
+        std::transform(global_local_number_data.begin(),global_local_number_data.end(),
+                       destCountInnerNbr.begin(),[](int len){return len;});
+        std::partial_sum(destCountInnerNbr.begin(), destCountInnerNbr.end()-1,
+                         displsInnerNbr.begin()+1, std::plus<int>());
+    }
+    sizesGatherMethod(data_inner_size.data(),local_number_data,global_data_inner_size.data(),
+                      destCountInnerNbr.data(),displsInnerNbr.data(),root);
+    
+    //Gather DATA_Elements
+    std::vector<DATA_Element> global_DATA_Elements;
+    std::vector<int> destCountDATAElements(data_target_size);
+    std::vector<int> displsInnerDATAElements(data_target_size,0);
+    if(root==-1 || root==my_rank)
+    {
+        global_DATA_Elements.resize(std::accumulate(global_data_inner_size.begin(),
+                                                    global_data_inner_size.end(),0));
+        int index=0;
+        std::transform(global_local_number_data.begin(),global_local_number_data.end(),
+                       destCountDATAElements.begin(),[&](int len)
+                        { 
+                            int count = std::accumulate(global_data_inner_size.begin()+index,global_data_inner_size.begin()+index+len,0);
+                            index+=len;
+                            return count;
+                        });
+        std::partial_sum(destCountDATAElements.begin(),destCountDATAElements.end()-1,
+                         displsInnerDATAElements.begin()+1,std::plus<int>());
+    }
+    dataGatherMethod(local_DATA_Elements.data(),local_DATA_Elements_size,
+                     global_DATA_Elements.data(),destCountDATAElements.data(),
+                     displsInnerDATAElements.data(),DATA_Element_datatype,root);
+   
+    //Reorganize DATA
+    auto collectedData = std::make_unique<std::vector<std::vector<DATA>>>();
+    if(root==-1 || root==my_rank)
+    {
+        collectedData->resize(number_ranks);
+        for(int rank=0;rank<number_ranks;rank++)
+        {
+            int rank_DataElement_Start = displsInnerDATAElements[rank];
+            int rank_number_data = destCountInnerNbr[rank];
+            std::vector<int> rank_innerSize(rank_number_data);
+            std::transform(global_data_inner_size.begin()+displsInnerNbr[rank],
+                        global_data_inner_size.begin()+displsInnerNbr[rank]+destCountInnerNbr[rank],
+                        rank_innerSize.begin(),[](int len){return len;});
+            for(int j=0;j<rank_innerSize.size();j++)
+            {
+                std::vector<DATA_Element> dat(rank_innerSize[j]);
+                std::memcpy(dat.data(),&global_DATA_Elements[rank_DataElement_Start],
+                            rank_innerSize[j]*sizeof(DATA_Element));
+                (*collectedData)[rank].push_back(transformElementaryToData(dat));
+            }
+        }
+    }
+    
+    return std::move(collectedData);
+};

@@ -198,18 +198,17 @@ void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 	std::unique_ptr<GraphProperty::AreaConnecMap> areaConnect;
 	std::unique_ptr<GraphProperty::Histogram> histogramCountBins;
 	std::unique_ptr<GraphProperty::Histogram> histogramWidthBins;
-	std::vector<long double> motifFraction; 
+	std::vector<long double> motifFraction;
+	double modularity;
 	try{
 		//areaConnect = GraphProperty::areaConnectivityStrength(dg);
 		//histogramCountBins = GraphProperty::edgeLengthHistogramm_constBinCount(dg,50);
 		//histogramWidthBins =  GraphProperty::edgeLengthHistogramm_constBinWidth(dg,2.0);
-		motifFraction = GraphProperty::networkTripleMotifs(dg);
+		modularity = GraphProperty::computeModularity(dg);
 		if (my_rank == 0) 
 		{
-			std::cout << "Motifs"<< '\n';
-			for(int motifFrac:motifFraction)
-				std::cout <<motifFrac<<"   ";
-			std::cout <<'\n';
+			std::cout << "Modularity"<< '\n';
+			std::cout <<modularity<<"   ";
 			fflush(stdout);
 		}
 	}
