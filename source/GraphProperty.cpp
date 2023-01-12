@@ -766,15 +766,16 @@ double GraphProperty::computeModularity
     const int number_ranks = MPIWrapper::get_number_ranks();
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
     const std::vector<std::string>& area_names = graph.get_local_area_names();
-
+    int lookRank=4;
+    
     std::function<std::unique_ptr<std::vector<std::pair<std::string,int>>>(const DistributedGraph&)> 
-        getData = [](const DistributedGraph& dg)
+        getData = [&](const DistributedGraph& dg)
         {
             const std::vector<std::string>& area_names = dg.get_local_area_names();
             auto data = std::make_unique<std::vector<std::pair<std::string,int>>>(area_names.size());
             std::transform(area_names.cbegin(),area_names.cend(),data->begin(),
                            [](std::string name)
-                            {return std::pair<std::string,int>(name,name.size());});
+                            {return std::pair<std::string,int>(name,name.size());});            
             return std::move(data);
         };
         
@@ -785,13 +786,30 @@ double GraphProperty::computeModularity
         [](std::string area_name){return std::vector<char>(area_name.cbegin(),area_name.cend());},
         [](std::vector<char>area_name_v){return std::string(area_name_v.data(),area_name_v.size());},
         MPI_CHAR
-    );    
+    );
     
-    std::for_each((*area_names_list_of_ranks)[my_rank].cbegin(),
-                  (*area_names_list_of_ranks)[my_rank].cend(),
-                  [](std::string s){std::cout<<s.size();});
+    /*
+    if(my_rank==lookRank)
+    {
+        std::cout<<"Rank:"<<my_rank<<"  size:"<<area_names.size()<<std::endl;
+        for(int i=0;i<area_names.size();i++)
+            std::cout<<" "<<area_names[i]; 
+        std::cout<<std::endl;    
+        fflush(stdout);
+    }
 
-    throw std::string("790");
+    MPIWrapper::barrier();
+    if(my_rank==0)
+    {
+        std::cout<<"Rank:"<<lookRank<<"  size:"<<(*area_names_list_of_ranks)[lookRank].size()<<std::endl;
+        for(int i=0;i<(*area_names_list_of_ranks)[lookRank].size();i++)
+            std::cout<<" "<<(*area_names_list_of_ranks)[lookRank][i];    
+    }
+    std::cout<<std::endl;
+    fflush(stdout);
+    MPIWrapper::barrier();
+    */
+
     
     //Create global name indices
     std::unordered_map<std::string,std::uint64_t> area_names_map;
@@ -807,6 +825,14 @@ double GraphProperty::computeModularity
             }
         }
     }
+    
+    /*
+    std::cout<<"Rank:"<<my_rank<<"  size:"<<area_names_list.size()<<std::endl;
+    for(int i=0;i<area_names_list.size();i++)
+        std::cout<<" "<<area_names_list[i]; 
+    std::cout<<std::endl;    
+    fflush(stdout);
+    */
     
     //Create rank local area distance sum
     std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>>>
@@ -851,9 +877,9 @@ double GraphProperty::computeModularity
         };
         
     std::unique_ptr<NodeToNodeQuestionStructure<std::uint64_t,std::uint8_t>> adjacency_results;
-    adjacency_results = std::move(node_to_node_question<std::uint64_t,std::uint8_t>
+    adjacency_results = node_to_node_question<std::uint64_t,std::uint8_t>
                             (graph,MPI_UINT64_T,collect_adjacency_area_info,
-                                   MPI_UINT8_T,test_for_adjacent_equal_Area));
+                                   MPI_UINT8_T,test_for_adjacent_equal_Area);
     
     std::uint64_t local_adjacency_sum = 0;
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
@@ -867,6 +893,11 @@ double GraphProperty::computeModularity
         }
     }
     std::uint64_t global_adjacency_sum = MPIWrapper::all_reduce<std::uint64_t>(local_adjacency_sum,MPI_UINT64_T,MPI_SUM);
+    
+    std::cout<<"Rank:"<<my_rank<<"  local_adjacency_sum:"<<local_adjacency_sum<<std::endl;
+    MPIWrapper::barrier();
+    std::cout<<"Rank:"<<my_rank<<"  global_adjacency_sum:"<<global_adjacency_sum<<std::endl;
+    MPIWrapper::barrier();
     
     std::vector<std::vector<nodeModularityInfo>> areaGlobalID_to_node(area_names_list.size());
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
@@ -885,24 +916,44 @@ double GraphProperty::computeModularity
         
         areaGlobalID_to_node[area_global_ID].push_back(nodeInfo);
     }
+    
+    //throw std::string("920");
+    
     std::vector<std::vector<nodeModularityInfo>> local_areaGlobalID_to_node;
     for(int area_global_ID=0;area_global_ID<area_names_list.size();area_global_ID++)
     {
         int calculationRank = area_global_ID%number_ranks;
+
+        if(my_rank==0)
+            std::cout<<"Area_name:"<<area_names_list[area_global_ID]<<"  calculationRank:"<<calculationRank<<std::endl;
+        
+        fflush(stdout);
+        MPIWrapper::barrier();
         
         int area_local_size = areaGlobalID_to_node[area_global_ID].size();
-        int total_size;
-        MPIWrapper::reduce<int>(&total_size,&area_local_size,1,MPI_INT,MPI_SUM,calculationRank);
+        int total_size=-1;
+        //std::cout<<"Rank:"<<my_rank<<"   area_local_size:"<<area_local_size<<std::endl;
+
+        MPIWrapper::reduce<int>(&area_local_size,&total_size,1,MPI_INT,MPI_SUM,calculationRank);
+        
+        //std::cout<<"Rank:"<<my_rank<<"   area_local_size:"<<area_local_size<<"  total_size:"<<total_size<<std::endl;
+        fflush(stdout);
+        MPIWrapper::barrier();
         
         if(my_rank==calculationRank)
         {
             local_areaGlobalID_to_node.push_back({});
             local_areaGlobalID_to_node.back().resize(total_size);
         }
+        throw std::string("941");
         MPIWrapper::gather<nodeModularityInfo>(areaGlobalID_to_node[area_global_ID].data(),
                                                local_areaGlobalID_to_node.back().data(),area_local_size,
                                                MPIWrapper::MPI_nodeModularityInfo,calculationRank);
     }
+
+    throw std::string("941");
+
+    
     std::uint64_t local_in_out_degree_node_sum = 0;
     for(std::vector<nodeModularityInfo>& nodes_of_area : local_areaGlobalID_to_node)
     {
@@ -923,6 +974,12 @@ double GraphProperty::computeModularity
     std::uint64_t local_m = number_local_nodes;
     std::uint64_t global_m = MPIWrapper::all_reduce<std::uint64_t>(local_m,MPI_UINT64_T,MPI_SUM);
 
+    std::cout<<"Rank:"<<my_rank<<"  local_m:"<<local_m<<std::endl;
+    MPIWrapper::barrier();
+    std::cout<<"Rank:"<<my_rank<<"  global_m:"<<global_m<<std::endl;
+    MPIWrapper::barrier();
+    throw std::string("961");
+    
     return (double)global_adjacency_sum/(double)(global_m*global_m) + (double)global_in_out_degree_node_sum/(double)(global_m);
 }
 
@@ -1512,15 +1569,23 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::addQue
             if(!(outerIndex<nodes_to_ask_question.size() && outerIndex>=0))
                 std::cout<<outerIndex<<"-----------------------------------------------------------"<<nodes_to_ask_question.size()<<std::endl;
             */
-            assert(outerIndex<nodes_to_ask_question.size() && outerIndex>=0);
+            
+            assert(outerIndex>=0);
+            assert(outerIndex<nodes_to_ask_question.size());
+            assert(outerIndex<nodes_that_ask_the_question.size());
+            assert(outerIndex<question_parameters.size());
+            
+            assert(nodes_that_ask_the_question[outerIndex].size()==
+                   nodes_to_ask_question[outerIndex].size());
+            assert(nodes_that_ask_the_question[outerIndex].size()==
+                   question_parameters[outerIndex].size());
+            
+            std::uint64_t innerIndex = nodes_to_ask_question[outerIndex].size();
+                        
             nodes_to_ask_question[outerIndex].push_back(target_local_node);
-            assert(outerIndex<nodes_that_ask_the_question.size() && outerIndex>=0);
             nodes_that_ask_the_question[outerIndex].push_back(questioner);
-            assert(outerIndex<question_parameters.size() && outerIndex>=0);
             question_parameters[outerIndex].push_back(Q_parameter_struct);
-            
-            std::uint64_t innerIndex = nodes_to_ask_question.size();
-            
+                        
             auto doublePair = 
             std::pair<std::uint64_t,std::pair<std::uint64_t,std::uint64_t>>(questioner,{outerIndex,innerIndex});
             questioner_node_to_outerIndex_and_innerIndex.insert(doublePair);
@@ -1540,6 +1605,24 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::addQue
                     
             rank_to_outerIndex.insert({target_rank,outerIndex});
         }
+    }
+    
+    for(auto keyValue = questioner_node_to_outerIndex_and_innerIndex.begin();
+        keyValue!=questioner_node_to_outerIndex_and_innerIndex.end();
+        keyValue++)
+    {
+        std::uint64_t questioner = keyValue->first;
+        std::uint64_t outerIndex = keyValue->second.first;
+        assert(outerIndex>=0);
+        assert(outerIndex<nodes_to_ask_question.size());
+        assert(outerIndex<nodes_that_ask_the_question.size());
+        assert(outerIndex<question_parameters.size());
+        std::uint64_t innerIndex = keyValue->second.second;
+        assert(innerIndex>=0);
+        assert(innerIndex<nodes_to_ask_question[outerIndex].size());
+        assert(innerIndex<nodes_that_ask_the_question[outerIndex].size());
+        assert(questioner==nodes_that_ask_the_question[outerIndex][innerIndex]);
+        assert(innerIndex<question_parameters[outerIndex].size());
     }
     
     structureStatus = PrepareQuestionsToSend;
@@ -1735,6 +1818,8 @@ std::unique_ptr<std::vector<A_parameter>> GraphProperty::NodeToNodeQuestionStruc
         std::uint64_t outerIndex = keyValue->second.first;
         assert(outerIndex<answers_to_questions.size() && outerIndex>=0);
         std::uint64_t innerIndex = keyValue->second.second;
+        if(!(innerIndex<answers_to_questions[outerIndex].size() && innerIndex>=0))
+            std::cout<<"-------"<<outerIndex<<"---------"<<innerIndex<<"---------"<<answers_to_questions[outerIndex].size()<<std::endl;
         assert(innerIndex<answers_to_questions[outerIndex].size() && innerIndex>=0);
         answers->push_back(answers_to_questions[outerIndex][innerIndex]);
     }
@@ -1787,6 +1872,25 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::finali
     */
     
     structureStatus = ClosedQuestionsPreparation;
+    
+    for(auto keyValue = questioner_node_to_outerIndex_and_innerIndex.begin();
+        keyValue!=questioner_node_to_outerIndex_and_innerIndex.end();
+        keyValue++)
+    {
+        std::uint64_t questioner = keyValue->first;
+        std::uint64_t outerIndex = keyValue->second.first;
+        assert(outerIndex>=0);
+        assert(outerIndex<nodes_to_ask_question.size());
+        assert(outerIndex<list_index_to_adressee_rank.size());
+        assert(outerIndex<nodes_that_ask_the_question.size());
+        assert(outerIndex<question_parameters.size());
+        std::uint64_t innerIndex = keyValue->second.second;
+        assert(innerIndex>=0);
+        assert(innerIndex<nodes_to_ask_question[outerIndex].size());
+        assert(innerIndex<nodes_that_ask_the_question[outerIndex].size());
+        assert(questioner==nodes_that_ask_the_question[outerIndex][innerIndex]);
+        assert(innerIndex<question_parameters[outerIndex].size());
+    }
     
     
     // Testing
@@ -1901,6 +2005,27 @@ std::unique_ptr<std::vector<std::vector<DATA>>> GraphProperty::gather_Data
                     });
     int local_DATA_Elements_size = local_DATA_Elements.size();
     
+    /*
+    MPIWrapper::barrier();
+    std::cout<<"----------------------------------------------------------------------"<<std::endl;
+    MPIWrapper::barrier();
+    
+    if(my_rank==2)
+    {
+        std::cout<<"Rank:"<<my_rank<<"  size:"<<data_inner_size.size()<<std::endl;
+        for(int i=0;i<data_inner_size.size();i++)
+                std::cout<<" "<<data_inner_size[i];
+        std::cout<<"Rank:"<<my_rank<<"  size:"<<local_DATA_Elements.size()<<std::endl;
+        for(int i=0;i<local_DATA_Elements.size();i++)
+                std::cout<<" "<<local_DATA_Elements[i]; 
+        std::cout<<std::endl;    
+        fflush(stdout);
+    }
+    MPIWrapper::barrier();
+    std::cout<<"----------------------------------------------------------------------"<<std::endl;
+    MPIWrapper::barrier();
+    */
+    
     //Gather number of DATA items
     std::vector<int> global_local_number_data(data_target_size);
     std::vector<int> destCountNbr(data_target_size,1);
@@ -1951,7 +2076,23 @@ std::unique_ptr<std::vector<std::vector<DATA>>> GraphProperty::gather_Data
     dataGatherMethod(local_DATA_Elements.data(),local_DATA_Elements_size,
                      global_DATA_Elements.data(),destCountDATAElements.data(),
                      displsInnerDATAElements.data(),DATA_Element_datatype,root);
-   
+
+    /*
+    MPIWrapper::barrier();
+    if(my_rank==0)
+    {
+        std::cout<<"Rank:"<<my_rank<<"  size:"<<destCountDATAElements[2]<<std::endl;
+        for(int i=displsInnerDATAElements[2];i<displsInnerDATAElements[2]+destCountDATAElements[2];i++)
+                std::cout<<" "<<global_DATA_Elements[i]; 
+        std::cout<<std::endl;    
+        fflush(stdout);
+    }
+    
+    MPIWrapper::barrier();
+    std::cout<<"----------------------------------------------------------------------"<<std::endl;
+    MPIWrapper::barrier();
+    */
+    
     //Reorganize DATA
     auto collectedData = std::make_unique<std::vector<std::vector<DATA>>>();
     if(root==-1 || root==my_rank)
@@ -1965,15 +2106,32 @@ std::unique_ptr<std::vector<std::vector<DATA>>> GraphProperty::gather_Data
             std::transform(global_data_inner_size.begin()+displsInnerNbr[rank],
                         global_data_inner_size.begin()+displsInnerNbr[rank]+destCountInnerNbr[rank],
                         rank_innerSize.begin(),[](int len){return len;});
+            int displacement=0;
             for(int j=0;j<rank_innerSize.size();j++)
             {
                 std::vector<DATA_Element> dat(rank_innerSize[j]);
-                std::memcpy(dat.data(),&global_DATA_Elements[rank_DataElement_Start],
+                std::memcpy(dat.data(),&global_DATA_Elements[rank_DataElement_Start+displacement],
                             rank_innerSize[j]*sizeof(DATA_Element));
+                displacement+=rank_innerSize[j];
                 (*collectedData)[rank].push_back(transformElementaryToData(dat));
             }
+            
+            /*
+            if(my_rank==0 && rank==2)
+            {
+                std::cout<<"After reorganize"<<std::endl;
+                std::cout<<"Rank:"<<my_rank<<"  size:"<<rank_innerSize.size()<<std::endl;
+                for(int i=0;i<rank_innerSize.size();i++)
+                        std::cout<<" "<<rank_innerSize[i];
+                std::cout<<"Rank:"<<my_rank<<"  size:"<<(*collectedData)[rank].size()<<std::endl;
+                for(int i=0;i<(*collectedData)[rank].size();i++)
+                        std::cout<<" "<<(*collectedData)[rank][i]; 
+                std::cout<<std::endl;    
+                fflush(stdout);
+            }
+            */
         }
     }
-    
+
     return std::move(collectedData);
 };
