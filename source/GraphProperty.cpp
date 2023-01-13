@@ -923,38 +923,42 @@ double GraphProperty::computeModularity
     for(int area_global_ID=0;area_global_ID<area_names_list.size();area_global_ID++)
     {
         int calculationRank = area_global_ID%number_ranks;
-
-        if(my_rank==0)
-            std::cout<<"Area_name:"<<area_names_list[area_global_ID]<<"  calculationRank:"<<calculationRank<<std::endl;
-        
-        fflush(stdout);
-        MPIWrapper::barrier();
-        
         int area_local_size = areaGlobalID_to_node[area_global_ID].size();
-        int total_size=-1;
-        //std::cout<<"Rank:"<<my_rank<<"   area_local_size:"<<area_local_size<<std::endl;
-
-        MPIWrapper::reduce<int>(&area_local_size,&total_size,1,MPI_INT,MPI_SUM,calculationRank);
         
-        //std::cout<<"Rank:"<<my_rank<<"   area_local_size:"<<area_local_size<<"  total_size:"<<total_size<<std::endl;
-        fflush(stdout);
-        MPIWrapper::barrier();
-        
+        std::unique_ptr<std::vector<std::vector<nodeModularityInfo>>> local_areaGlobalID_to_node_ID = gather_Data_to_one_Rank<nodeModularityInfo,nodeModularityInfo>
+        (
+            graph,
+            [&](const DistributedGraph& dg)
+            {
+                auto data = std::make_unique<std::vector<std::pair<nodeModularityInfo,int>>>(area_local_size);
+                std::transform(areaGlobalID_to_node[area_global_ID].cbegin(), areaGlobalID_to_node[area_global_ID].cend(),
+                               data->begin(),[](nodeModularityInfo modulInfo)
+                                    {return std::pair<nodeModularityInfo,int>(modulInfo,1);});            
+                return std::move(data);
+            },
+            [](nodeModularityInfo modulInfo){return std::vector<nodeModularityInfo>({modulInfo});},
+            [](std::vector<nodeModularityInfo> modulInfo_v){return modulInfo_v[0];},
+            MPIWrapper::MPI_nodeModularityInfo,
+            calculationRank
+        );
         if(my_rank==calculationRank)
         {
             local_areaGlobalID_to_node.push_back({});
-            local_areaGlobalID_to_node.back().resize(total_size);
+            std::for_each(local_areaGlobalID_to_node_ID->begin(),local_areaGlobalID_to_node_ID->end(),
+                       [&](std::vector<nodeModularityInfo> modulInfo_v)
+                       {local_areaGlobalID_to_node.back().insert(local_areaGlobalID_to_node.back().end(),
+                                                                 modulInfo_v.begin(),modulInfo_v.end());});
         }
-        throw std::string("941");
-        MPIWrapper::gather<nodeModularityInfo>(areaGlobalID_to_node[area_global_ID].data(),
-                                               local_areaGlobalID_to_node.back().data(),area_local_size,
-                                               MPIWrapper::MPI_nodeModularityInfo,calculationRank);
     }
-
-    throw std::string("941");
-
+    MPIWrapper::barrier();
+    std::cout<<"Rank:"<<my_rank<<"  local_areaGlobalID_to_node.size():"<<local_areaGlobalID_to_node.size()<<std::endl;
+    MPIWrapper::barrier();
+    //throw std::string("941");
     
-    std::uint64_t local_in_out_degree_node_sum = 0;
+    std::uint64_t local_m = number_local_nodes;
+    std::uint64_t global_m = MPIWrapper::all_reduce<std::uint64_t>(local_m,MPI_UINT64_T,MPI_SUM);
+
+    double local_in_out_degree_node_sum = 0;
     for(std::vector<nodeModularityInfo>& nodes_of_area : local_areaGlobalID_to_node)
     {
         for(int i=0;i<nodes_of_area.size();i++)
@@ -964,23 +968,32 @@ double GraphProperty::computeModularity
                 if(i!=j)
                 {
                     assert(nodes_of_area[i].area_global_ID==nodes_of_area[j].area_global_ID);
-                    local_in_out_degree_node_sum+=(-(nodes_of_area[i].node_in_degree*nodes_of_area[j].node_out_degree));
+                    local_in_out_degree_node_sum+=static_cast<double>(-1*(nodes_of_area[i].node_in_degree*nodes_of_area[j].node_out_degree))/global_m;
                 }
             }
         }
     }
-    std::uint64_t global_in_out_degree_node_sum = MPIWrapper::all_reduce<std::uint64_t>(local_in_out_degree_node_sum,MPI_UINT64_T,MPI_SUM);
+    MPIWrapper::barrier();
+    std::cout<<"Rank:"<<my_rank<<"  local_in_out_degree_node_sum:"<<local_in_out_degree_node_sum<<std::endl;
+    MPIWrapper::barrier();
     
-    std::uint64_t local_m = number_local_nodes;
-    std::uint64_t global_m = MPIWrapper::all_reduce<std::uint64_t>(local_m,MPI_UINT64_T,MPI_SUM);
+    double global_in_out_degree_node_sum = MPIWrapper::all_reduce<double>(local_in_out_degree_node_sum,MPI_DOUBLE,MPI_SUM);
 
     std::cout<<"Rank:"<<my_rank<<"  local_m:"<<local_m<<std::endl;
     MPIWrapper::barrier();
     std::cout<<"Rank:"<<my_rank<<"  global_m:"<<global_m<<std::endl;
     MPIWrapper::barrier();
-    throw std::string("961");
     
-    return (double)global_adjacency_sum/(double)(global_m*global_m) + (double)global_in_out_degree_node_sum/(double)(global_m);
+    MPIWrapper::barrier();
+    if(my_rank==0)
+    {
+        std::cout<<"Rank:"<<my_rank<<"  global_adjacency_sum:"<<global_adjacency_sum<<std::endl;
+        std::cout<<"Rank:"<<my_rank<<"  global_m:"<<global_m<<std::endl;
+        std::cout<<"Rank:"<<my_rank<<"  global_in_out_degree_node_sum:"<<global_in_out_degree_node_sum<<std::endl;
+    }
+    MPIWrapper::barrier();
+    
+    return (static_cast<double>(global_adjacency_sum) + global_in_out_degree_node_sum)/static_cast<double>(global_m);
 }
 
 std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
