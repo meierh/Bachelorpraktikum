@@ -1,11 +1,106 @@
 #include "GraphProperty.h"
 
+
 std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStrength
 (
     const DistributedGraph& graph,
     unsigned int resultToRank
 )
 {
+// Build local area connection map
+    const int my_rank = MPIWrapper::get_my_rank();
+    const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
+    AreaIDConnecMap my_rank_connecID_map;
+    for( std::uint64_t node_ID = 0;node_ID<number_local_nodes;node_ID++)
+    {
+        const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank,node_ID);
+        for(const OutEdge& oEdge: oEdges)
+        {
+            AreaLocalID sourceNameID(my_rank,node_ID);
+            AreaLocalID targetNameID(oEdge.target_rank,oEdge.target_id);
+            my_rank_connecID_map[{sourceNameID,targetNameID}] += oEdge.weight;
+        }
+    }
+    
+    
+// Gather local area connection maps to result rank
+    using connecID_map_data = std::tuple<std::int64_t,std::int64_t,std::int64_t,std::int64_t,std::int64_t>;
+    std::function<std::unique_ptr<std::vector<std::pair<connecID_map_data,int>>>(const DistributedGraph& dg)> 
+        extract_connecID_map = 
+        [&](const DistributedGraph& dg)
+        {
+            auto connecID_list = std::make_unique<std::vector<std::pair<connecID_map_data,int>>>();
+            for(auto mapEntry=my_rank_connecID_map.cbegin();mapEntry!=my_rank_connecID_map.cend();mapEntry++)
+            {
+                auto connecID_data_Entry = std::tie(mapEntry->first.first.first ,mapEntry->first.first.second,
+                                                    mapEntry->first.second.first,mapEntry->first.second.second,
+                                                    mapEntry->second);
+                std::pair<connecID_map_data,int> composed_Entry(connecID_data_Entry,std::tuple_size<connecID_map_data>());
+                connecID_list->push_back(composed_Entry);
+            }
+            return connecID_list;
+        };    
+    std::unique_ptr<std::vector<std::vector<connecID_map_data>>> ranks_to_connecID_data = 
+    gather_Data_to_one_Rank<connecID_map_data,std::int64_t>
+    (
+        graph,
+        extract_connecID_map,
+        [](connecID_map_data dat){auto [s_r,s_n,t_r,t_n,w] = dat; return std::vector<std::int64_t>({s_r,s_n,t_r,t_n,w});},
+        [](std::vector<std::int64_t>& data_vec)
+            {
+                assert(data_vec.size()==std::tuple_size<connecID_map_data>());
+                return std::tie(data_vec[0],data_vec[1],data_vec[2],data_vec[3],data_vec[4]);
+            },
+        MPI_INT64_T,
+        resultToRank    
+    );
+    
+    
+// Gather name lists from all ranks to result rank
+    std::function<std::unique_ptr<std::vector<std::pair<std::string,int>>>(const DistributedGraph&)> 
+        getNames = [](const DistributedGraph& dg)
+        {
+            const std::vector<std::string>& area_names = dg.get_local_area_names();
+            auto data = std::make_unique<std::vector<std::pair<std::string,int>>>(area_names.size());
+            std::transform(area_names.cbegin(),area_names.cend(),data->begin(),
+                           [](std::string name){return std::pair<std::string,int>(name,name.size());}
+                           );            
+            return std::move(data);
+        };
+    std::unique_ptr<std::vector<std::vector<std::string>>> area_names_list_of_ranks = gather_Data_to_all_Ranks<std::string,char>
+    (
+        graph,
+        getNames,
+        [](std::string area_name){return std::vector<char>(area_name.cbegin(),area_name.cend());},
+        [](std::vector<char>area_name_v){return std::string(area_name_v.data(),area_name_v.size());},
+        MPI_CHAR
+    );
+    
+    
+// Combine connecID_maps and transfer IDs to area names
+    auto global_connecName_map = std::make_unique<AreaConnecMap>();
+    for(const std::vector<connecID_map_data>& connecData_of_rank : *ranks_to_connecID_data)
+    {
+        for(const connecID_map_data& connecData : connecData_of_rank)
+        {            
+            std::string source_area = (*area_names_list_of_ranks)[std::get<0>(connecData)][std::get<1>(connecData)];
+            std::string target_area = (*area_names_list_of_ranks)[std::get<2>(connecData)][std::get<3>(connecData)];
+            (*global_connecName_map)[{source_area,target_area}] += std::get<4>(connecData);
+        }
+    }
+
+    return std::move(global_connecName_map);
+}
+
+/*
+std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStrength
+(
+    const DistributedGraph& graph,
+    unsigned int resultToRank
+)
+{
+    
+    
     const int my_rank = MPIWrapper::get_my_rank();
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
     
@@ -69,15 +164,6 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
         }
     }
     
-
-    /*
-    std::cout<<my_rank<<"  ";
-    for(int i=0;i<area_names.size();i++)
-    {
-        std::cout<<area_names_char_dist[i]<<"("<<area_names[i]<<")  ";
-    }
-    std::cout<<std::endl;
-    */
     
     // exchange size of char index array
     int size = area_names_char_dist.size();
@@ -331,6 +417,7 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
 
     return std::move(result);
 }
+*/
 
 std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStrengthSingleProc
 (
@@ -1005,6 +1092,135 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
 {
     const int my_rank = MPIWrapper::get_my_rank();
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
+        
+    //Create rank local area distance sum
+    std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,Vec3d>>>
+                 (const DistributedGraph& dg,std::uint64_t node_local_ind)>
+        transfer_node_position = [&](const DistributedGraph& dg,std::uint64_t node_local_ind)
+        {
+            const std::vector<OutEdge>& oEdges = dg.get_out_edges(my_rank,node_local_ind);
+            Vec3d source_node_pos = dg.get_node_position(my_rank,node_local_ind);
+            auto node_position_vec =
+                std::make_unique<std::vector<std::tuple<std::uint64_t,std::uint64_t,Vec3d>>>(oEdges.size());
+            for(int i=0;i<oEdges.size();i++)
+            {
+                (*node_position_vec)[i] = std::tie(oEdges[i].target_rank,oEdges[i].target_id,source_node_pos);
+            }
+            return std::move(node_position_vec);
+        };
+    
+    std::function<double(const DistributedGraph& dg,std::uint64_t node_local_ind,Vec3d para)> 
+        compute_edge_length = [&](const DistributedGraph& dg,std::uint64_t node_local_ind,Vec3d source_node_pos)
+        {
+            Vec3d target_node_pos = dg.get_node_position(my_rank,node_local_ind);
+            return (source_node_pos-target_node_pos).calculate_p_norm(2);
+        };
+        
+    std::unique_ptr<NodeToNodeQuestionStructure<Vec3d,double>> edge_length_results=
+        node_to_node_question<Vec3d,double>(graph,MPIWrapper::MPI_Vec3d,transfer_node_position,
+                                                  MPI_DOUBLE,compute_edge_length);
+    
+    std::vector<double> edge_lengths;    
+    for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
+    {
+        std::unique_ptr<std::vector<double>> length_of_all_edges=
+            edge_length_results->getAnswersOfQuestionerNode(node_local_ind);
+        edge_lengths.insert(edge_lengths.end(),length_of_all_edges->begin(),length_of_all_edges->end());
+    }
+    
+    const auto [min_length, max_length] = std::minmax_element(edge_lengths.begin(), edge_lengths.end());
+    double global_min_length = *min_length;
+    double global_max_length = *max_length;
+    
+    std::cout<<"edge_lengths.size: "<<my_rank<<": "<<edge_lengths.size()<<std::endl;
+    std::cout<<"min_length "<<my_rank<<": "<<global_min_length<<std::endl;
+    std::cout<<"max_length "<<my_rank<<": "<<global_max_length<<std::endl;
+    MPIWrapper::barrier();
+    
+    global_min_length = MPIWrapper::all_reduce<double>(global_min_length,MPI_DOUBLE,MPI_MIN);
+    global_max_length = MPIWrapper::all_reduce<double>(global_max_length,MPI_DOUBLE,MPI_MAX);
+    
+    MPIWrapper::barrier();
+    std::cout<<"---------------------------------------------------------"<<std::endl;
+    MPIWrapper::barrier();
+    std::cout<<"edge_lengths.size: "<<my_rank<<": "<<edge_lengths.size()<<std::endl;
+    std::cout<<"min_length "<<my_rank<<": "<<global_min_length<<std::endl;
+    std::cout<<"max_length "<<my_rank<<": "<<global_max_length<<std::endl;
+    MPIWrapper::barrier();
+    
+    std::unique_ptr<Histogram> histogram = histogram_creator(global_min_length,global_max_length);
+    std::pair<double,double> span = histogram->front().first;
+    double bin_width = span.second - span.first;
+    
+    std::cout<<"histogram->size() "<<my_rank<<": "<<histogram->size()<<std::endl;
+    std::cout<<"bin_width "<<my_rank<<": "<<bin_width<<std::endl;
+    std::cout<<"min_length "<<my_rank<<": "<<global_min_length<<std::endl;
+    std::cout<<"max_length "<<my_rank<<": "<<global_max_length<<std::endl;
+    MPIWrapper::barrier();
+    std::cout<<"histogram->front() "<<my_rank<<": "<<"("<<histogram->front().first.first<<","<<histogram->front().first.second<<")"<<std::endl;
+    std::cout<<"histogram->back() "<<my_rank<<": "<<"("<<histogram->back().first.first<<","<<histogram->back().first.second<<")"<<std::endl;
+
+    for(const double length : edge_lengths)
+    {
+        int index = (length-global_min_length)/bin_width;
+        assert(index<histogram->size());
+        (*histogram)[index].second++;
+    }
+    
+    MPIWrapper::barrier();
+    //throw std::string("572");
+    
+    std::vector<std::uint64_t> histogram_pure_count_src(histogram->size());
+    for(int i=0;i<histogram->size();i++)
+    {
+        histogram_pure_count_src[i] = (*histogram)[i].second;
+    }
+    std::vector<std::uint64_t> histogram_pure_count_dest;
+    if(my_rank==resultToRank)
+    {
+        histogram_pure_count_dest.resize(histogram->size());
+    }
+    
+    MPIWrapper::barrier();
+    //throw std::string("578");
+    
+    MPIWrapper::reduce<std::uint64_t>(histogram_pure_count_src.data(),histogram_pure_count_dest.data(),
+                                          histogram->size(),MPI_UINT64_T,MPI_SUM,resultToRank);
+    MPIWrapper::barrier();
+    MPIWrapper::barrier();
+    std::cout<<"Rank:"<<my_rank<<" - histogram_pure_count_dest: "<<histogram_pure_count_dest.size()<<" [";
+    for(auto c :histogram_pure_count_dest)
+        std::cout<<c<<" ";
+    std::cout<<"]"<<std::endl;
+    MPIWrapper::barrier();
+    //throw std::string("589");
+    if(my_rank==resultToRank)
+    {
+        for(int i=0;i<histogram->size();i++)
+        {
+            (*histogram)[i].second = histogram_pure_count_dest[i];
+        }
+    }
+    else
+    {
+        histogram.reset(nullptr);
+    }
+    //throw std::string("609");
+
+    return std::move(histogram);
+}
+
+
+/*
+std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
+(
+    const DistributedGraph& graph,
+    std::function<std::unique_ptr<Histogram>(double,double)> histogram_creator,
+    unsigned int resultToRank
+)
+{
+    const int my_rank = MPIWrapper::get_my_rank();
+    const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
     
     std::function<Vec3d(int,int)> date_get_function = std::bind(
         &DistributedGraph::get_node_position, graph,std::placeholders::_1, std::placeholders::_2);
@@ -1113,6 +1329,8 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
 
     return std::move(histogram);
 }
+*/
+
 
 template<typename DATA> 
 std::tuple<
