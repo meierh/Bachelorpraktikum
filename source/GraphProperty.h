@@ -70,27 +70,6 @@ public:
 private:
     static inline unsigned int cantorPair(unsigned int k1, unsigned int k2) {return (((k1+k2)*(k1+k2+1))/2)+k2;}    
     
-    /* Shortcuts for collectAlongEdges_InToOut method
-     */
-    template<typename DATA>
-    using collectedData_ptr = std::vector<std::vector<DATA>>;
-    using collectedDataStructure_ptr = std::vector<std::unordered_map<std::uint64_t,int>>;
-    using collectedDataIndexes_ptr = std::unordered_map<int,std::pair<int,int>>;
-    
-    /* General method for transfering one date of the type DATA from any in edge to any out edge
-     */
-    template<typename DATA>
-    static std::tuple<
-        std::unique_ptr<collectedData_ptr<DATA>>,
-        std::unique_ptr<collectedDataStructure_ptr>,
-        std::unique_ptr<collectedDataIndexes_ptr>>
-    collectAlongEdges_InToOut
-    (
-        const DistributedGraph& graph,
-        MPI_Datatype datatype,
-        std::function<DATA(int,int)> date_get_function
-    );
-    
     static std::unique_ptr<Histogram> edgeLengthHistogramm
     (
         const DistributedGraph& graph,
