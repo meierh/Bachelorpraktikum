@@ -189,30 +189,44 @@ void testEdgeGetter(std::filesystem::path input_directory) {
 	}
 }
 
-void compareAreaConnecMap(GraphProperty::AreaConnecMap& map1,GraphProperty::AreaConnecMap& map2)
+void compareAreaConnecMap(const GraphProperty::AreaConnecMap& mapPar,const GraphProperty::AreaConnecMap& mapSeq)
 {
-	for(auto keyValue=map1.begin();keyValue!=map1.end();keyValue++)
+	for(auto keyValue=mapPar.begin();keyValue!=mapPar.end();keyValue++)
 	{
-		auto otherKeyValue = map2.find(keyValue->first);
-		if(otherKeyValue!=map2.end())
+		auto otherKeyValue = mapSeq.find(keyValue->first);
+		if(otherKeyValue!=mapSeq.end())
 		{
 			if(otherKeyValue->second!=keyValue->second)
-				std::cout<<"keyValue:"<<keyValue->first.first<<" --> "<<keyValue->first.second<<"  map1:"<<keyValue->second<<"  map2:"<<otherKeyValue->second<<std::endl;
+			{
+				std::cout<<"keyValue:"<<keyValue->first.first<<" --> "<<keyValue->first.second<<"  mapPar:"<<keyValue->second<<"  mapSeq:"<<otherKeyValue->second<<std::endl;
+				throw "Error found";
+			}
 		}
 		else
-			std::cout<<"keyValue:"<<keyValue->first.first<<" --> "<<keyValue->first.second<<"  does not exist in maps 2"<<std::endl;
+		{
+			std::cout<<"keyValue:"<<keyValue->first.first<<" --> "<<keyValue->first.second<<"  does not exist in mapSeq"<<std::endl;
+			throw "Error found";
+		}
 	}
-	for(auto keyValue=map2.begin();keyValue!=map2.end();keyValue++)
+	for(auto keyValue=mapSeq.begin();keyValue!=mapSeq.end();keyValue++)
 	{
-		auto otherKeyValue = map1.find(keyValue->first);
-		if(otherKeyValue!=map1.end())
+		auto otherKeyValue = mapPar.find(keyValue->first);
+		if(otherKeyValue!=mapPar.end())
 		{
 			if(otherKeyValue->second!=keyValue->second)
-				std::cout<<"keyValue:"<<keyValue->first.first<<" --> "<<keyValue->first.second<<"  map2:"<<keyValue->second<<"  map1:"<<otherKeyValue->second<<std::endl;
+			{
+				std::cout<<"keyValue:"<<keyValue->first.first<<" --> "<<keyValue->first.second<<"  mapSeq:"<<keyValue->second<<"  mapPar:"<<otherKeyValue->second<<std::endl;
+				throw "Error found";
+			}
 		}
 		else
-			std::cout<<"keyValue:"<<keyValue->first.first<<" --> "<<keyValue->first.second<<"  does not exist in maps 1"<<std::endl;
+		{
+			std::cout<<"keyValue:"<<keyValue->first.first<<" --> "<<keyValue->first.second<<"  does not exist in mapPar"<<std::endl;
+			throw "Error found";
+		}
 	}
+	
+	std::cout<<"mapPar:"<<mapPar.size()<<" || "<<"mapSeq:"<<mapSeq.size()<<std::endl;
 }
 
 void test_areaConnectivityStrength(std::filesystem::path input_directory)
@@ -225,12 +239,18 @@ void test_areaConnectivityStrength(std::filesystem::path input_directory)
 	std::unique_ptr<GraphProperty::AreaConnecMap> areaConnectSingleProc_Helge;
 	std::unique_ptr<GraphProperty::AreaConnecMap> areaConnectSingleProc;
 	try{
-		areaConnectParallel = GraphProperty::areaConnectivityStrength(dg);
+		areaConnectParallel = GraphProperty::areaConnectivityStrength(dg); // No runtime errors
 		MPIWrapper::barrier();
-		areaConnectSingleProc_Helge = GraphProperty::areaConnectivityStrengthSingleProc_Helge(dg);
+		areaConnectSingleProc_Helge = GraphProperty::areaConnectivityStrengthSingleProc_Helge(dg); // Runtime errors
 		MPIWrapper::barrier();
 		areaConnectSingleProc = GraphProperty::areaConnectivityStrengthSingleProc(dg);
+		fflush(stdout);
 		MPIWrapper::barrier();
+		fflush(stdout);
+		std::cout<<"------------------------------------------------------------------------------------------"<<std::endl;
+		compareAreaConnecMap(*areaConnectParallel,*areaConnectSingleProc);
+		compareAreaConnecMap(*areaConnectParallel,*areaConnectSingleProc_Helge);
+		compareAreaConnecMap(*areaConnectSingleProc_Helge,*areaConnectSingleProc);
 	}
 	catch(std::string err)
 	{
@@ -267,37 +287,6 @@ void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 	}
 }
 
-void test_GraphPropertyAlgorithmsSingleProc(std::filesystem::path input_directory)
-{
-	const auto my_rank = MPIWrapper::get_my_rank();
-	DistributedGraph dg(input_directory);
-	MPIWrapper::barrier();
-
-	//std::unique_ptr<GraphProperty::AreaConnecMap> areaConnect;
-	std::unique_ptr<GraphProperty::Histogram> histogramCountBins;
-	std::unique_ptr<GraphProperty::Histogram> histogramWidthBins;
-	try{
-		if(my_rank == 0) std::cout << "areaConnectivityStrengthSingleProc: " << std::endl;
-		auto areaConnect = GraphProperty::areaConnectivityStrengthSingleProc(dg);
-		//GraphProperty::testing(dg);
-		
-		/*if(my_rank == 0) std::cout << "edgeLengthHistogram_constBinCount: " << std::endl;
-		histogramCountBins = GraphProperty::edgeLengthHistogram_constBinCount(dg,50);
-		MPIWrapper::barrier();*/
-
-		/*if(my_rank == 0) std::cout << "edgeLengthHistogram_constBinWidth: " << std::endl;
-		histogramWidthBins =  GraphProperty::edgeLengthHistogram_constBinWidth(dg,2.0);
-		if (my_rank == 0) 
-		{
-			std::cout << "Number of Bins in histogramWidthBins: " << histogramWidthBins->size() << '\n';
-			fflush(stdout);
-		}*/
-	}
-	catch(std::string err)
-	{
-		std::cout<<"Err:"<<err<<std::endl;
-	}
-}
 
 int main(int argument_count, char* arguments[]) {
 	CLI::App app{ "" };
@@ -310,7 +299,7 @@ int main(int argument_count, char* arguments[]) {
 
 	MPIWrapper::init(argument_count, arguments);
 
-	test_GraphPropertyAlgorithms(input_directory);
+	test_areaConnectivityStrength(input_directory);
 
 	MPIWrapper::finalize();
 

@@ -170,6 +170,11 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
         resultToRank    
     );
     
+    MPIWrapper::barrier();
+    std::cout<<"Hello from 174 "<<my_rank<<std::endl;
+    fflush(stdout);
+    MPIWrapper::barrier();  
+    
     std::function<std::unique_ptr<std::vector<std::pair<std::string,int>>>(const DistributedGraph&)> 
         getNames = [](const DistributedGraph& dg)
         {
@@ -190,6 +195,11 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
         resultToRank
     );
     
+    MPIWrapper::barrier();
+    std::cout<<"Hello from 199 "<<my_rank<<std::endl;
+    fflush(stdout);
+    MPIWrapper::barrier();  
+    
     auto global_connecName_map = std::make_unique<AreaConnecMap>();
     if(my_rank==resultToRank)
     {
@@ -197,7 +207,7 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
         {
             for(std::uint64_t node_local_ind=0; node_local_ind<(*ranks_to_number_local_nodes)[rank][0];node_local_ind++)
             {
-                std::int64_t source_node_areaID = graph.get_node_area_localID(my_rank,node_local_ind);
+                std::int64_t source_node_areaID = graph.get_node_area_localID(rank,node_local_ind);
                 const std::vector<OutEdge>& oEdges = graph.get_out_edges(rank,node_local_ind);
                 for(const OutEdge& oEdge: oEdges)
                 {
@@ -209,6 +219,10 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
             }
         }
     }
+    MPIWrapper::barrier();
+    std::cout<<"Hello from 223 "<<my_rank<<std::endl;
+    fflush(stdout);
+    MPIWrapper::barrier();  
     return std::move(global_connecName_map);
 }
 
@@ -388,10 +402,7 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
                     
                     // Store all weights of the area pairs that realize a connection of two different areas 
                     // in the corresponding "area to area hash class" of the result map
-                    if(source_area_str != target_area_str)
-                    {
-                        (*result)[{source_area_str, target_area_str}] += oEdge.weight;
-                    }
+                    (*result)[{source_area_str, target_area_str}] += oEdge.weight;
                 }
             }
         }
