@@ -35,9 +35,8 @@ public:
         }
     };    
     using AreaConnecMap = std::unordered_map<std::pair<std::string,std::string>,int,stdPair_hash>;
-    using AreaLocalID = std::pair<std::uint64_t,std::uint64_t>;
-    using AreaIDConnecMap = std::unordered_map<std::pair<AreaLocalID,AreaLocalID>,int,stdDoublePair_hash>;
     static std::unique_ptr<AreaConnecMap> areaConnectivityStrength(const DistributedGraph& graph,unsigned int resultToRank=0);
+    static std::unique_ptr<AreaConnecMap> areaConnectivityStrengthSingleProc_Helge(const DistributedGraph& graph,unsigned int resultToRank=0);    
     static std::unique_ptr<AreaConnecMap> areaConnectivityStrengthSingleProc(const DistributedGraph& graph,unsigned int resultToRank=0);
     
     static bool compare_area_connecs(std::unique_ptr<AreaConnecMap> const &map1, std::unique_ptr<AreaConnecMap> const &map2, unsigned int resultToRank=0);
@@ -71,6 +70,17 @@ public:
     );
     
 private:
+    using AreaLocalID = std::pair<std::uint64_t,std::uint64_t>;
+    using AreaIDConnecMap = std::unordered_map<std::pair<AreaLocalID,AreaLocalID>,int,stdDoublePair_hash>;
+    typedef struct
+    {
+        std::int64_t source_rank;
+        std::int64_t source_area_localID;
+        std::int64_t target_rank;
+        std::int64_t target_area_localID;
+        std::int64_t weight;        
+    } areaConnectivityInfo;    
+    
     static inline unsigned int cantorPair(unsigned int k1, unsigned int k2) {return (((k1+k2)*(k1+k2+1))/2)+k2;}    
     
     static std::unique_ptr<Histogram> edgeLengthHistogramm

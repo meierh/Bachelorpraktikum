@@ -24,9 +24,6 @@ public:
 		std::uint64_t area_name_ind;
 		MPIWrapper::passive_sync_RMA_get<std::uint64_t>(&area_name_ind,1,node_id,mpi_rank,MPI_UINT64_T,
 														area_names_ind_window);
-		
-		if(area_name_ind>=area_names.size() || area_name_ind<0)
-			throw 99;
 		return area_name_ind;
 	}
 	
