@@ -98,67 +98,159 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     unsigned int resultToRank
 )
 {
-    const int my_rank = MPIWrapper::get_my_rank();
+    // Define all relevant local variables
+    const int& my_rank = MPIWrapper::get_my_rank();
+    const int& number_ranks = MPIWrapper::get_number_ranks();
+    const int& number_local_nodes = graph.get_number_local_nodes();
     std::vector<uint64_t> node_numbers = MPIWrapper::all_gather(graph.get_number_local_nodes());
-
-    ////////////////////////////////////////////// TAKEN FROM ABOVE //////////////////////////////////////////////
-    //Gathering of area local ind and strings for the main process
-    std::unordered_map<AreaLocalID,std::string,stdPair_hash> areaID_to_name;
-    std::vector<int> area_names_char_dist;
     const std::vector<std::string> area_names = graph.get_local_area_names();
+    const int& number_area_names = area_names.size();
+    MPIWrapper::barrier();
+    
+    // ========== GET AREA NAMES TO SINGLE COMPUTATION RANK ==========
+
+    // Create local transmit_area_names_string and area_names_char_len vectors
+    std::vector<int> area_names_char_len;
+    std::vector<char> transmit_area_names_string;
     for(const std::string& name : area_names)
     {
-        area_names_char_dist.push_back(name.size());
+        for(int i = 0; i < name.size(); i++)
+        {
+            transmit_area_names_string.push_back(name[i]);
+        }
+        area_names_char_len.push_back(name.size());
     }
-    int area_names_totalLength = std::accumulate(area_names_char_dist.begin(),area_names_char_dist.end(),0);
-    auto transmit_area_names = std::make_unique<char[]>(area_names_totalLength);
+    MPIWrapper::barrier();
+    
+    // Gather rank_to_number_area_names vector as helper for char_len_displ (and global_area_names_char_len)
+    assert(area_names_char_len.size() == number_area_names); //debug
+    int nbr_area_names = area_names.size();
+    std::vector<int> rank_to_number_area_names;
+    if(my_rank == resultToRank)
+    {
+        rank_to_number_area_names.resize(number_ranks);
+    }
+    MPIWrapper::gather<int>(&nbr_area_names, rank_to_number_area_names.data(), 1, MPI_INT, resultToRank);
+    MPIWrapper::barrier();
+
+    // Crate char_len_displ as helper for global_area_names_char_len 
+    // and prepare global_area_names_char_len with correct size
+    std::vector<int> char_len_displ;
+    std::vector<int> global_area_names_char_len;
+    if(my_rank == resultToRank)
+    {
+        char_len_displ.resize(number_ranks);
+        int displacement = 0;
+        
+        for(int r = 0; r < number_ranks; r++)
+        {
+            char_len_displ[r] = displacement;
+            displacement += rank_to_number_area_names[r];
+        }
+        global_area_names_char_len.resize(displacement);
+    }
+    MPIWrapper::barrier();
+
+    // Gather global_area_names_char_len (with Help of char_len_displ and rank_to_number_area_names)
+    MPIWrapper::gatherv<int>(area_names_char_len.data(), nbr_area_names,
+                            global_area_names_char_len.data(), rank_to_number_area_names.data(), char_len_displ.data(),
+                            MPI_INT, resultToRank);
+    MPIWrapper::barrier();
+
+    // Finally create rank_to_area_names_char_len as helper for rank_to_area_names
+    std::vector<std::vector<int>> rank_to_area_names_char_len;
     if(my_rank==resultToRank)
     {
-        for(int otherRank=0; otherRank<MPIWrapper::get_number_ranks(); otherRank++)
+        rank_to_area_names_char_len.resize(number_ranks);
+        for(int r = 0; r < number_ranks-1; r++)
         {
-            if(otherRank==resultToRank)
-                continue;
-            
-            int nbr_of_area_names;
-            MPIWrapper::Recv(&nbr_of_area_names,1,MPI_INT,otherRank,0);
-            std::vector<int> area_names_char_dist_other(nbr_of_area_names);
-            MPIWrapper::Recv(area_names_char_dist_other.data(),nbr_of_area_names,MPI_INT,otherRank,1);
-            int area_names_totalLength_other = std::accumulate(area_names_char_dist.begin(),area_names_char_dist.end(),0);
-            auto transmit_area_names_other = std::make_unique<char[]>(area_names_totalLength_other);
-            MPIWrapper::Recv(transmit_area_names_other.get(),area_names_totalLength_other,MPI_CHAR,otherRank,3);
-            std::vector<std::string> area_names_other(nbr_of_area_names);
-            int pChar=0;
-            for(int i=0;i<area_names_other.size();i++)
+            for(int l = char_len_displ[r]; l < char_len_displ[r+1]; l++)
             {
-                area_names_other[i] = std::string(transmit_area_names_other.get()+pChar,area_names_char_dist_other[i]);
-                pChar+=area_names_char_dist_other[i];
-            }
-            for(int i=0;i<area_names_other.size();i++)
-            {
-                areaID_to_name.insert({{otherRank,i},area_names_other[i]});
+                rank_to_area_names_char_len[r].push_back(global_area_names_char_len[l]);
             }
         }
-        for(int i=0;i<area_names.size();i++)
+        for(int l = char_len_displ[number_ranks-1]; l < global_area_names_char_len.size(); l++)
         {
-            areaID_to_name.insert({{my_rank,i},area_names[i]});
+            rank_to_area_names_char_len[number_ranks-1].push_back(global_area_names_char_len[l]);
         }
     }
-    else
+    MPIWrapper::barrier();
+
+    // Gather rank_to_string_len as helper for char_displ
+    int nbr_string_chars = transmit_area_names_string.size();
+    std::vector<int> rank_to_string_len;
+    if(my_rank == resultToRank)
     {
-        int size = area_names_char_dist.size();
-        MPIWrapper::Send(&size,1,MPI_INT,resultToRank,0);
-        MPIWrapper::Send(area_names_char_dist.data(),area_names_char_dist.size(),MPI_INT,resultToRank,1);
-        MPIWrapper::Send(transmit_area_names.get(),area_names_totalLength,MPI_CHAR,resultToRank,3);
+        rank_to_string_len.resize(number_ranks);
     }
-    ////////////////////////////////////////////// TAKEN FROM ABOVE //////////////////////////////////////////////
+    MPIWrapper::gather<int>(&nbr_string_chars, rank_to_string_len.data(), 1, MPI_INT, resultToRank);
+    MPIWrapper::barrier();
+
+    // Create char_displ as helper for rank_to_area_names
+    std::vector<int> char_displ;
+    if(my_rank == resultToRank)
+    {
+        char_displ.resize(number_ranks);
+        int displacement = 0;
+        for(int r = 0; r < number_ranks; r++)
+        {
+                char_displ[r] = displacement;
+                displacement += rank_to_string_len[r];
+        }
+    }
+    MPIWrapper::barrier();
+
+    // Prepare and gather global_area_names_string as helper for rank_to_area_names
+    std::vector<char> global_area_names_string;
+    if(my_rank == resultToRank)
+    {
+        int sum = std::accumulate(rank_to_string_len.begin(),
+                                    rank_to_string_len.end(), 0);
+        global_area_names_string.resize(sum);
+    }
+    MPIWrapper::gatherv<char>(transmit_area_names_string.data(), nbr_string_chars,
+                              global_area_names_string.data(), rank_to_string_len.data(), char_displ.data(),
+                              MPI_CHAR, resultToRank);
+    MPIWrapper::barrier();
+    
+    // Finally create rank_to_area_names
+    std::vector<std::vector<std::string>> rank_to_area_names;
+    if(my_rank == resultToRank)
+    {
+        rank_to_area_names.resize(number_ranks);
+        int displacement = 0;
+        for(int r = 0; r < rank_to_area_names_char_len.size(); r++)
+        {
+            for(int l = 0; l < rank_to_area_names_char_len[r].size(); l++)
+            {
+                std::string name(&global_area_names_string[displacement],
+                                 rank_to_area_names_char_len[r][l]);
+                rank_to_area_names[r].push_back(name);
+                displacement += rank_to_area_names_char_len[r][l];
+            }
+        }
+        
+        // Print out rank_to_area_names
+        for(int i = 0; i < rank_to_area_names.size(); i++)
+        {
+            std::cout<<"From Rank: "<<i<<" [";
+            for(int j=0;j<rank_to_area_names[i].size();j++)
+            {
+                std::cout<<" "<<rank_to_area_names[i][j];
+            }
+            std::cout<<"] "<<rank_to_area_names[i].size()<<std::endl;
+        }
+        std::cout << "" << std::endl;
+    }
+    MPIWrapper::barrier();
+    
+    // ========== LET SINGLE RANK COMPUTE AREA CONNECTIVITY ==========
 
     auto result = std::make_unique<AreaConnecMap>();
-    // Computation is performed by a single process:
-    if(my_rank == 0)
-    {
-        const int& number_ranks = MPIWrapper::get_number_ranks();
-        assert(node_numbers.size() == number_ranks);    // debug
 
+    // Computation is performed by a single process:
+    if(my_rank == resultToRank)
+    {
         // Iterate over each rank...
         for(int r = 0; r < number_ranks; r++)
         {
@@ -166,30 +258,94 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
             for(int n = 0; n < node_numbers[r]; n++)
             {
                 // Consider each outgoing edge and find out source and target areas
-                const auto source_area_id = graph.get_node_area_localID(r, n);
                 const std::vector<OutEdge>& oEdges = graph.get_out_edges(r, n);
                 for(const OutEdge& oEdge : oEdges)
                 {
                     std::uint64_t source_area_localID = graph.get_node_area_localID(r, n);
                     std::uint64_t target_area_localID = graph.get_node_area_localID(oEdge.target_rank, oEdge.target_id);
+                    std::string source_area_str = rank_to_area_names[r][source_area_localID];
+                    std::string target_area_str = rank_to_area_names[oEdge.target_rank][target_area_localID];
                     
-                    AreaLocalID sourceArea = std::pair<uint64_t, uint64_t>(r, source_area_localID);
-                    AreaLocalID targetArea = std::pair<uint64_t, uint64_t>(oEdge.target_rank, target_area_localID);
-                    
-                    std::string source_area_str = areaID_to_name[sourceArea];
-                    std::string target_area_str = areaID_to_name[targetArea];
-
                     // Store all weights of the area pairs that realize a connection of two different areas 
                     // in the corresponding "area to area hash class" of the result map
                     if(source_area_str != target_area_str)
                     {
                         (*result)[{source_area_str, target_area_str}] += oEdge.weight;
                     }
-                }   
+                }
             }
         }
+        // Print out AreaConnecMap:
+        int nr = 0;
+        for (auto& [key, value]: (*result)) 
+        {
+            std::cout << "connection " << nr << 
+                ": weight = " << value << " (" << key.first << " --> " << key.second << ")" << std::endl;
+            nr++;
+        }
+        std::cout << "Elements in areaConnecMap (single proc): " << nr << std::endl;
+        std::cout << "Size of areaConnecMap (single proc): " << result->size() << std::endl;
     }
     return std::move(result);
+}
+
+bool GraphProperty::compare_area_connecs(std::unique_ptr<GraphProperty::AreaConnecMap> const &map1, std::unique_ptr<GraphProperty::AreaConnecMap> const &map2, unsigned int resultToRank)
+{
+    if(MPIWrapper::get_my_rank() == resultToRank)
+    {    
+        std::cout << "compare_area_connecs: size of map1 = " << map1->size() << std::endl;
+        std::cout << "compare_area_connecs: size of map2 = " << map2->size() << std::endl;
+
+        for (auto it1 = map1->begin(); it1 != map1->end(); it1++) 
+        {
+            auto it2 = map2->find(it1->first);
+            if(it2->second != it1->second)
+            {
+                std::cout << "compare_area_connecs: map1 has elements map2 is missing" << std::endl;
+                return false;
+            }
+        }
+
+        for (auto it2 = map2->begin(); it2 != map2->end(); it2++) 
+        {
+            auto it1 = map1->find(it2->first);
+            if(it1->second != it2->second)
+            {
+                std::cout << "compare_area_connecs: map2 has elements map1 is missing" << std::endl;
+                return false;
+            }
+        }
+        std::cout << "compare_area_connecs: map1 is equal to map2" << std::endl;
+    }
+    return true;
+}
+
+bool GraphProperty::compare_area_connecs_alt(std::unique_ptr<GraphProperty::AreaConnecMap> const &map1, std::unique_ptr<GraphProperty::AreaConnecMap> const &map2, unsigned int resultToRank)
+{
+    if(MPIWrapper::get_my_rank() == resultToRank)
+    {    
+        
+        if(map1->size() != map2->size())
+        {
+            std::cout << "compare_area_connecs: map1.size=" << map1->size() << ", map2.size=" << map2->size() << std::endl;
+            std::cout << "compare_area_connecs: maps have different sizes" << std::endl;
+            return false;
+        }
+        
+        int nr = 0;
+        auto iter2 = map2->begin();
+        for (auto iter1 = map1->begin(); iter1 != map1->end(); iter1++) 
+        {   
+            if(*iter1 != *iter2)    //possible debug pending if operator!= is not recursive for pairs (then commpare tuple elementwise)
+            {
+                std::cout << "compare_area_connecs: maps are not equal" << std::endl;
+                return false;
+            }
+            iter2++; nr++;
+        }
+        std::cout << "compare_area_connecs: maps are equal" << std::endl;
+    }
+    return true;
 }
 
 std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_constBinWidth

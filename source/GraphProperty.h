@@ -40,6 +40,9 @@ public:
     static std::unique_ptr<AreaConnecMap> areaConnectivityStrength(const DistributedGraph& graph,unsigned int resultToRank=0);
     static std::unique_ptr<AreaConnecMap> areaConnectivityStrengthSingleProc(const DistributedGraph& graph,unsigned int resultToRank=0);
     
+    static bool compare_area_connecs(std::unique_ptr<AreaConnecMap> const &map1, std::unique_ptr<AreaConnecMap> const &map2, unsigned int resultToRank=0);
+    static bool compare_area_connecs_alt(std::unique_ptr<AreaConnecMap> const &map1, std::unique_ptr<AreaConnecMap> const &map2, unsigned int resultToRank=0);
+
     /* Histogram for count inside interval greater equal the lower and smaller than the upper bound
      */
     using Histogram = std::vector<std::pair<std::pair<double,double>,std::uint64_t>>;
