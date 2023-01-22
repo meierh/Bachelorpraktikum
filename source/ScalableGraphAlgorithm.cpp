@@ -189,6 +189,55 @@ void testEdgeGetter(std::filesystem::path input_directory) {
 	}
 }
 
+void compareAreaConnecMap(GraphProperty::AreaConnecMap& map1,GraphProperty::AreaConnecMap& map2)
+{
+	for(auto keyValue=map1.begin();keyValue!=map1.end();keyValue++)
+	{
+		auto otherKeyValue = map2.find(keyValue->first);
+		if(otherKeyValue!=map2.end())
+		{
+			if(otherKeyValue->second!=keyValue->second)
+				std::cout<<"keyValue:"<<keyValue->first.first<<" --> "<<keyValue->first.second<<"  map1:"<<keyValue->second<<"  map2:"<<otherKeyValue->second<<std::endl;
+		}
+		else
+			std::cout<<"keyValue:"<<keyValue->first.first<<" --> "<<keyValue->first.second<<"  does not exist in maps 2"<<std::endl;
+	}
+	for(auto keyValue=map2.begin();keyValue!=map2.end();keyValue++)
+	{
+		auto otherKeyValue = map1.find(keyValue->first);
+		if(otherKeyValue!=map1.end())
+		{
+			if(otherKeyValue->second!=keyValue->second)
+				std::cout<<"keyValue:"<<keyValue->first.first<<" --> "<<keyValue->first.second<<"  map2:"<<keyValue->second<<"  map1:"<<otherKeyValue->second<<std::endl;
+		}
+		else
+			std::cout<<"keyValue:"<<keyValue->first.first<<" --> "<<keyValue->first.second<<"  does not exist in maps 1"<<std::endl;
+	}
+}
+
+void test_areaConnectivityStrength(std::filesystem::path input_directory)
+{
+	const auto my_rank = MPIWrapper::get_my_rank();
+	DistributedGraph dg(input_directory);
+	MPIWrapper::barrier();
+
+	std::unique_ptr<GraphProperty::AreaConnecMap> areaConnectParallel;
+	std::unique_ptr<GraphProperty::AreaConnecMap> areaConnectSingleProc_Helge;
+	std::unique_ptr<GraphProperty::AreaConnecMap> areaConnectSingleProc;
+	try{
+		areaConnectParallel = GraphProperty::areaConnectivityStrength(dg);
+		MPIWrapper::barrier();
+		areaConnectSingleProc_Helge = GraphProperty::areaConnectivityStrengthSingleProc_Helge(dg);
+		MPIWrapper::barrier();
+		areaConnectSingleProc = GraphProperty::areaConnectivityStrengthSingleProc(dg);
+		MPIWrapper::barrier();
+	}
+	catch(std::string err)
+	{
+		std::cout<<"Err:"<<err<<std::endl;
+	}
+}
+
 void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 {
 	const auto my_rank = MPIWrapper::get_my_rank();

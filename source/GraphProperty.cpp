@@ -141,6 +141,77 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
     return std::move(global_connecName_map);
 }
 
+std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStrengthSingleProc_Helge
+(
+    const DistributedGraph& graph,
+    unsigned int resultToRank
+)
+{
+    const int my_rank = MPIWrapper::get_my_rank();
+    const int number_of_ranks = MPIWrapper::get_number_ranks();
+    const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
+    
+    std::function<std::unique_ptr<std::vector<std::pair<std::uint64_t,int>>>(const DistributedGraph& dg)> 
+        get_number_nodes = 
+        [&](const DistributedGraph& dg)
+        {
+            auto number_nodes = std::make_unique<std::vector<std::pair<std::uint64_t,int>>>();
+            number_nodes->push_back(std::pair<std::uint64_t,int>(number_local_nodes,1));
+            return number_nodes;
+        };    
+    std::unique_ptr<std::vector<std::vector<std::uint64_t>>> ranks_to_number_local_nodes = 
+    gather_Data_to_one_Rank<std::uint64_t,std::uint64_t>
+    (
+        graph,
+        get_number_nodes,
+        [](std::uint64_t dat){return std::vector<std::uint64_t>({dat});},
+        [](std::vector<std::uint64_t>& data_vec){return data_vec[0];},
+        MPI_UINT64_T,
+        resultToRank    
+    );
+    
+    std::function<std::unique_ptr<std::vector<std::pair<std::string,int>>>(const DistributedGraph&)> 
+        getNames = [](const DistributedGraph& dg)
+        {
+            const std::vector<std::string>& area_names = dg.get_local_area_names();
+            auto data = std::make_unique<std::vector<std::pair<std::string,int>>>(area_names.size());
+            std::transform(area_names.cbegin(),area_names.cend(),data->begin(),
+                           [](std::string name){return std::pair<std::string,int>(name,name.size());}
+                           );
+            return std::move(data);
+        };
+    std::unique_ptr<std::vector<std::vector<std::string>>> area_names_list_of_ranks = gather_Data_to_one_Rank<std::string,char>
+    (
+        graph,
+        getNames,
+        [](std::string area_name){return std::vector<char>(area_name.cbegin(),area_name.cend());},
+        [](std::vector<char>area_name_v){return std::string(area_name_v.data(),area_name_v.size());},
+        MPI_CHAR,
+        resultToRank
+    );
+    
+    auto global_connecName_map = std::make_unique<AreaConnecMap>();
+    if(my_rank==resultToRank)
+    {
+        for(int rank=0;rank<number_of_ranks;rank++)
+        {
+            for(std::uint64_t node_local_ind=0; node_local_ind<(*ranks_to_number_local_nodes)[rank][0];node_local_ind++)
+            {
+                std::int64_t source_node_areaID = graph.get_node_area_localID(my_rank,node_local_ind);
+                const std::vector<OutEdge>& oEdges = graph.get_out_edges(rank,node_local_ind);
+                for(const OutEdge& oEdge: oEdges)
+                {
+                    std::int64_t target_node_areaID = graph.get_node_area_localID(oEdge.target_rank,oEdge.target_id);
+                    std::string source_area = (*area_names_list_of_ranks)[rank][source_node_areaID];
+                    std::string target_area = (*area_names_list_of_ranks)[oEdge.target_rank][target_node_areaID];
+                    (*global_connecName_map)[{source_area,target_area}] += oEdge.weight;
+                }
+            }
+        }
+    }
+    return std::move(global_connecName_map);
+}
+
 std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStrengthSingleProc
 (
     const DistributedGraph& graph,

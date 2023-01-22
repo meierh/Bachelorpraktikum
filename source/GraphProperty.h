@@ -36,6 +36,7 @@ public:
     };    
     using AreaConnecMap = std::unordered_map<std::pair<std::string,std::string>,int,stdPair_hash>;
     static std::unique_ptr<AreaConnecMap> areaConnectivityStrength(const DistributedGraph& graph,unsigned int resultToRank=0);
+    static std::unique_ptr<AreaConnecMap> areaConnectivityStrengthSingleProc_Helge(const DistributedGraph& graph,unsigned int resultToRank=0);    
     static std::unique_ptr<AreaConnecMap> areaConnectivityStrengthSingleProc(const DistributedGraph& graph,unsigned int resultToRank=0);
     
     /* Histogram for count inside interval greater equal the lower and smaller than the upper bound
