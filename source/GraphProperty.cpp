@@ -1,37 +1,41 @@
 #include "GraphProperty.h"
 
-
 std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStrength
 (
     const DistributedGraph& graph,
     unsigned int resultToRank
 )
 {
+// Test function parameters
+    const int number_of_ranks = MPIWrapper::get_number_of_ranks();
+    if(resultToRank>=number_of_ranks)
+        throw std::exception("Bad parameter");
+    
 // Build local area connection map
     const int my_rank = MPIWrapper::get_my_rank();
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
     std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,areaConnectivityInfo>>>
-                 (const DistributedGraph&, std::uint64_t)>
+        (const DistributedGraph&, std::uint64_t)>
         transfer_connection_sources = [&](const DistributedGraph& dg,std::uint64_t node_local_ind)
         {
             const std::vector<OutEdge>& oEdges = dg.get_out_edges(my_rank,node_local_ind);
             std::int64_t node_areaID = dg.get_node_area_localID(my_rank,node_local_ind);
             auto connection_sources=
             std::make_unique<std::vector<std::tuple<std::uint64_t,std::uint64_t,areaConnectivityInfo>>>(oEdges.size());
-            for(int i=0;i<oEdges.size();i++)
+            for(int i=0; i<oEdges.size(); i++)
             {
                 areaConnectivityInfo one_connection = {my_rank,node_areaID,oEdges[i].target_rank,-1,oEdges[i].weight};
                 (*connection_sources)[i] = std::tie(oEdges[i].target_rank,oEdges[i].target_id,one_connection);
             }
             return std::move(connection_sources);
-        };    
+        };
     std::function<areaConnectivityInfo(const DistributedGraph&, std::uint64_t, areaConnectivityInfo)> 
         fill_connection_target_areaID = 
         [&](const DistributedGraph& dg,std::uint64_t node_local_ind,areaConnectivityInfo connection)
         {
             connection.target_area_localID = dg.get_node_area_localID(my_rank,node_local_ind);
             return connection;
-        };        
+        };
     std::unique_ptr<NodeToNodeQuestionStructure<areaConnectivityInfo,areaConnectivityInfo>> area_connections=
         node_to_node_question<areaConnectivityInfo,areaConnectivityInfo>
                 (graph,MPIWrapper::MPI_areaConnectivityInfo,transfer_connection_sources,
@@ -43,26 +47,24 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
             area_connections->getAnswersOfQuestionerNode(node_ID);
         for(areaConnectivityInfo& one_connection : *node_connections)
         {
-            AreaLocalID sourceNameID(one_connection.source_rank,one_connection.source_area_localID);
-            AreaLocalID targetNameID(one_connection.target_rank,one_connection.target_area_localID);
-            my_rank_connecID_map[{sourceNameID,targetNameID}] += one_connection.weight;
+            AreaLocalID source_nameID(one_connection.source_rank,one_connection.source_area_localID);
+            AreaLocalID target_nameID(one_connection.target_rank,one_connection.target_area_localID);
+            my_rank_connecID_map[{source_nameID,target_nameID}] += one_connection.weight;
         }
     }
-    
-    std::cout<<"Hello from 25 "<<my_rank<<std::endl;    
-    
+
 // Gather local area connection maps to result rank
     using connecID_map_data = std::tuple<std::int64_t,std::int64_t,std::int64_t,std::int64_t,std::int64_t>;
-    std::function<std::unique_ptr<std::vector<std::pair<connecID_map_data,int>>>(const DistributedGraph& dg)> 
+    std::function<std::unique_ptr<std::vector<std::pair<connecID_map_data,int>>>(const DistributedGraph&)> 
         extract_connecID_map = 
         [&](const DistributedGraph& dg)
         {
             auto connecID_list = std::make_unique<std::vector<std::pair<connecID_map_data,int>>>();
-            for(auto mapEntry=my_rank_connecID_map.cbegin();mapEntry!=my_rank_connecID_map.cend();mapEntry++)
+            for(auto map_entry=my_rank_connecID_map.cbegin();map_entry!=my_rank_connecID_map.cend();map_entry++)
             {
-                auto connecID_data_Entry = std::tie(mapEntry->first.first.first ,mapEntry->first.first.second,
-                                                    mapEntry->first.second.first,mapEntry->first.second.second,
-                                                    mapEntry->second);
+                auto connecID_data_Entry = std::tie(map_entry->first.first.first ,map_entry->first.first.second,
+                                                    map_entry->first.second.first,map_entry->first.second.second,
+                                                    map_entry->second);
                 std::pair<connecID_map_data,int> composed_Entry(connecID_data_Entry,std::tuple_size<connecID_map_data>());
                 connecID_list->push_back(composed_Entry);
             }
@@ -80,64 +82,44 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
                 return std::tie(data_vec[0],data_vec[1],data_vec[2],data_vec[3],data_vec[4]);
             },
         MPI_INT64_T,
-        resultToRank    
+        resultToRank
     );
-    
-    MPIWrapper::barrier();
-    std::cout<<"Hello from 60 "<<my_rank<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();    
     
 // Gather name lists from all ranks to result rank
     std::function<std::unique_ptr<std::vector<std::pair<std::string,int>>>(const DistributedGraph&)> 
-        getNames = [](const DistributedGraph& dg)
+        get_names = [](const DistributedGraph& dg)
         {
             const std::vector<std::string>& area_names = dg.get_local_area_names();
             auto data = std::make_unique<std::vector<std::pair<std::string,int>>>(area_names.size());
-            std::transform(area_names.cbegin(),area_names.cend(),data->begin(),
-                           [](std::string name){return std::pair<std::string,int>(name,name.size());}
-                           );            
+            std::transform(area_names.cbegin(),area_names.cend(),data->begin(),[](std::string name){return std::pair<std::string,int>(name,name.size());});            
             return std::move(data);
         };
     std::unique_ptr<std::vector<std::vector<std::string>>> area_names_list_of_ranks = gather_Data_to_one_Rank<std::string,char>
     (
         graph,
-        getNames,
+        get_names,
         [](std::string area_name){return std::vector<char>(area_name.cbegin(),area_name.cend());},
         [](std::vector<char>area_name_v){return std::string(area_name_v.data(),area_name_v.size());},
         MPI_CHAR,
         resultToRank
     );
     
-    MPIWrapper::barrier();
-    std::cout<<"Hello from 81 "<<my_rank<<"  "<<area_names_list_of_ranks->size()<<" ";
-    std::for_each(area_names_list_of_ranks->begin(),area_names_list_of_ranks->end(),
-                  [](auto& vec){std::cout<<vec.size()<<" ";});
-    std::cout<<std::endl;    
-    fflush(stdout);
-    MPIWrapper::barrier();
-
-    
 // Combine connecID_maps and transfer IDs to area names
     auto global_connecName_map = std::make_unique<AreaConnecMap>();
     for(const std::vector<connecID_map_data>& connecData_of_rank : *ranks_to_connecID_data)
     {
-        for(const connecID_map_data& connecData : connecData_of_rank)
+        for(const connecID_map_data& connec_data : connecData_of_rank)
         {
-            assert(std::get<0>(connecData)<area_names_list_of_ranks->size());
-            if(!(std::get<1>(connecData)<(*area_names_list_of_ranks)[std::get<0>(connecData)].size()))
-                std::cout<<std::get<1>(connecData)<<" < "<<(*area_names_list_of_ranks)[std::get<0>(connecData)].size()<<std::endl;
-            assert(std::get<1>(connecData)<(*area_names_list_of_ranks)[std::get<0>(connecData)].size());
-            std::string source_area = (*area_names_list_of_ranks)[std::get<0>(connecData)][std::get<1>(connecData)];
-            assert(std::get<2>(connecData)<area_names_list_of_ranks->size());
-            assert(std::get<3>(connecData)<(*area_names_list_of_ranks)[std::get<2>(connecData)].size());
-            std::string target_area = (*area_names_list_of_ranks)[std::get<2>(connecData)][std::get<3>(connecData)];
-            (*global_connecName_map)[{source_area,target_area}] += std::get<4>(connecData);
+            assert(std::get<0>(connec_data)<area_names_list_of_ranks->size());
+            assert(std::get<1>(connec_data)<(*area_names_list_of_ranks)[std::get<0>(connec_data)].size());
+            std::string source_area = (*area_names_list_of_ranks)[std::get<0>(connec_data)][std::get<1>(connec_data)];
+            assert(std::get<2>(connec_data)<area_names_list_of_ranks->size());
+            assert(std::get<3>(connec_data)<(*area_names_list_of_ranks)[std::get<2>(connec_data)].size());
+            std::string target_area = (*area_names_list_of_ranks)[std::get<2>(connec_data)][std::get<3>(connec_data)];
+            (*global_connecName_map)[{source_area,target_area}] += std::get<4>(connec_data);
         }
     }
-    
-    std::cout<<"Hello from 95 "<<my_rank<<std::endl;    
-    
+
     return std::move(global_connecName_map);
 }
 
