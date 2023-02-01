@@ -287,6 +287,37 @@ void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 	}
 }
 
+void test_GraphPropertyAlgorithmsSingleProc(std::filesystem::path input_directory)
+{
+	const auto my_rank = MPIWrapper::get_my_rank();
+	DistributedGraph dg(input_directory);
+	MPIWrapper::barrier();
+
+	//std::unique_ptr<GraphProperty::AreaConnecMap> areaConnect;
+	std::unique_ptr<GraphProperty::Histogram> histogramCountBins;
+	std::unique_ptr<GraphProperty::Histogram> histogramWidthBins;
+	try{
+		if(my_rank == 0) std::cout << "areaConnectivityStrengthSingleProc: " << std::endl;
+		auto areaConnect = GraphProperty::areaConnectivityStrengthSingleProc(dg);
+		
+		if(my_rank == 0) std::cout << "edgeLengthHistogram_constBinCount: " << std::endl;
+		histogramCountBins = GraphProperty::edgeLengthHistogramm_constBinCount(dg,50);
+		MPIWrapper::barrier();
+
+		if(my_rank == 0) std::cout << "edgeLengthHistogram_constBinWidth: " << std::endl;
+		histogramWidthBins = GraphProperty::edgeLengthHistogramm_constBinWidth(dg,2.0);
+		if (my_rank == 0) 
+		{
+			std::cout << "Number of Bins in histogramWidthBins: " << histogramWidthBins->size() << '\n';
+			fflush(stdout);
+		}
+	}
+	catch(std::string err)
+	{
+		std::cout<<"Err:"<<err<<std::endl;
+	}
+}
+
 
 int main(int argument_count, char* arguments[]) {
 	CLI::App app{ "" };
@@ -299,7 +330,8 @@ int main(int argument_count, char* arguments[]) {
 
 	MPIWrapper::init(argument_count, arguments);
 
-	test_areaConnectivityStrength(input_directory);
+	//test_areaConnectivityStrength(input_directory);
+	test_GraphPropertyAlgorithmsSingleProc(input_directory);
 
 	MPIWrapper::finalize();
 

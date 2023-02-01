@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
+#include <functional>
+#include <stdexcept>
 #include <cassert>  // debug
 
 class GraphProperty {
@@ -98,6 +100,22 @@ private:
         const DistributedGraph& graph,
         std::function<std::unique_ptr<Histogram>(double,double)> histogram_creator,
         unsigned int resultToRank
+    );
+
+    /*
+    * This single process variant of the edgeLengthHistogram method lets only one main process
+    * collect and store all edge lengths in the resulting histogram.
+    * 
+    * @param graph underlaying graph
+    * @param histogram_creator function to crate a histogram in a specified shape
+    * @param resultToRank main process for computation
+    * @returns unique_ptr of the histogram created using the histogram_creater function
+    */
+    static std::unique_ptr<Histogram> edgeLengthHistogramSingleProc
+    (
+        const DistributedGraph& graph,
+        std::function<std::unique_ptr<Histogram>(double,double)> histogram_creator,
+        unsigned int resultToRank=0
     );
     
     template<typename Q_parameter,typename A_parameter>

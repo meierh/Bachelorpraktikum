@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <vector>
+#include <unordered_map>
 
 class DistributedGraph {
 public:
