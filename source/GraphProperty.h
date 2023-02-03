@@ -45,6 +45,8 @@ public:
     static bool compare_area_connecs(std::unique_ptr<AreaConnecMap> const &map1, std::unique_ptr<AreaConnecMap> const &map2, unsigned int resultToRank=0);
     static bool compare_area_connecs_alt(std::unique_ptr<AreaConnecMap> const &map1, std::unique_ptr<AreaConnecMap> const &map2, unsigned int resultToRank=0);
 
+    
+    /*|||------------------------Histogramm--------------------------------
     /* Histogram for count inside interval greater equal the lower and smaller than the upper bound
      */
     using Histogram = std::vector<std::pair<std::pair<double,double>,std::uint64_t>>;
@@ -60,6 +62,19 @@ public:
         std::uint64_t bin_count,
         unsigned int resultToRank=0
     );
+    static std::unique_ptr<Histogram> edgeLengthHistogramm_constBinWidthSingleProc
+    (
+        const DistributedGraph& graph,
+        double bin_width,
+        unsigned int resultToRank=0
+    );
+    static std::unique_ptr<Histogram> edgeLengthHistogramm_constBinCountSingleProc
+    (
+        const DistributedGraph& graph,
+        std::uint64_t bin_count,
+        unsigned int resultToRank=0
+    );
+    
     
     static std::vector<long double> networkTripleMotifs
     (

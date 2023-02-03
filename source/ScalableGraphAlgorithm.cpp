@@ -229,9 +229,12 @@ void compareAreaConnecMap(const GraphProperty::AreaConnecMap& mapPar,const Graph
 	std::cout<<"mapPar:"<<mapPar.size()<<" || "<<"mapSeq:"<<mapSeq.size()<<std::endl;
 }
 
-bool compareEdgeLengthHistogram(const GraphProperty::Histogram& histogramPar, const GraphProperty::Histogram& histogramSeq, const double& epsilon)
+bool compareEdgeLengthHistogram(const GraphProperty::Histogram& histogramPar, const GraphProperty::Histogram& histogramSeq, const double epsilon)
 {
-	std::cout << "---------- Compare histograms (epsilon = " << epsilon << "): ----------" << std::endl;
+	const auto my_rank = MPIWrapper::get_my_rank();
+	if(my_rank!=0)
+		return true;
+	std::cout << "----------"<<my_rank<<" Compare histograms (epsilon = " << epsilon << "): ----------" << std::endl;
 	std::cout << "size of histogramPar:" << histogramPar.size() << std::endl;
 	std::cout << "size of histogramSeq:" << histogramSeq.size() << std::endl;
 
@@ -239,20 +242,51 @@ bool compareEdgeLengthHistogram(const GraphProperty::Histogram& histogramPar, co
 	{
 		throw "Error found: Histograms have different sizes";
 	}
-
-	auto elemSeq = histogramSeq.begin();
-	for(auto elemPar = histogramPar.begin(); elemPar != histogramPar.end(); elemPar++)
+	
+	std::uint64_t total_Edges_Par = 0;
+	for(auto entry: histogramPar)
 	{
-		if(fabs(elemPar->first.first - elemSeq->first.first) > epsilon ||
-			fabs(elemPar->first.second - elemSeq->first.second) > epsilon)
+		total_Edges_Par += entry.second;
+	}
+	
+	std::uint64_t total_Edges_Seq = 0;
+	for(auto entry: histogramSeq)
+	{
+		total_Edges_Seq += entry.second;
+	}
+	
+	if(total_Edges_Par != total_Edges_Seq)
+	{
+		std::cout<<"total_Edges_Par:"<<total_Edges_Par<<std::endl;
+		std::cout<<"total_Edges_Seq:"<<total_Edges_Seq<<std::endl;
+		throw "Error found: Histograms have different total size";
+	}
+	std::cout<<"Equal edge count"<<std::endl;
+		
+
+	for(int bin=0; bin<histogramPar.size(); bin++)
+	{
+		auto elemPar = histogramPar[bin];
+		auto elemSeq = histogramSeq[bin];
+		if(fabs(elemPar.first.first - elemSeq.first.first) > epsilon)
 		{
+			std::cout<<"elemPar->first.first:"<<elemPar.first.first<<std::endl;
+			std::cout<<"elemSeq->first.first:"<<elemSeq.first.first<<std::endl;
 			throw "Error found: Histograms have different bin boundings";
 		}
-		if(elemPar->second != elemSeq->second)
+		if(fabs(elemPar.first.second - elemSeq.first.second) > epsilon)
 		{
+			std::cout<<"elemPar->first.second:"<<elemPar.first.second<<std::endl;
+			std::cout<<"elemSeq->first.second:"<<elemSeq.first.second<<std::endl;
+			throw "Error found: Histograms have different bin boundings";
+		}
+		if(elemPar.second != elemSeq.second)
+		{
+			std::cout<<"---------------------"<<bin<<"--------------------"<<std::endl;
+			std::cout<<"elemPar.second:"<<elemPar.second<<std::endl;
+			std::cout<<"elemSeq.second:"<<elemSeq.second<<std::endl;
 			throw "Error found: Histograms have different counts";
 		}
-		elemSeq++;
 	}
 	std::cout << "===> Histograms are equal" << std::endl;
 	return true;
@@ -286,6 +320,44 @@ void test_areaConnectivityStrength(std::filesystem::path input_directory)
 		std::cout<<"Err:"<<err<<std::endl;
 	}
 }
+
+void test_histogram(std::filesystem::path input_directory)
+{
+	const auto my_rank = MPIWrapper::get_my_rank();
+	DistributedGraph dg(input_directory);
+	MPIWrapper::barrier();
+
+	std::unique_ptr<GraphProperty::Histogram> histogramCountBins;
+	std::unique_ptr<GraphProperty::Histogram> histogramWidthBins;
+	std::unique_ptr<GraphProperty::Histogram> histogramCountBins_SingleProc;
+	std::unique_ptr<GraphProperty::Histogram> histogramWidthBins_SingleProc;
+	double bin_width = 1;
+	std::uint64_t bin_count = 50;
+	try{
+		
+		histogramCountBins = GraphProperty::edgeLengthHistogramm_constBinCount(dg,bin_count);
+		MPIWrapper::barrier();
+		histogramWidthBins = GraphProperty::edgeLengthHistogramm_constBinWidth(dg,bin_width); // No runtime errors
+		MPIWrapper::barrier();
+		histogramCountBins_SingleProc = GraphProperty::edgeLengthHistogramm_constBinCountSingleProc(dg,bin_count); // No runtime errors
+		MPIWrapper::barrier();
+		histogramWidthBins_SingleProc = GraphProperty::edgeLengthHistogramm_constBinWidthSingleProc(dg,bin_width); // No runtime errors
+		MPIWrapper::barrier();
+		
+		fflush(stdout);
+		MPIWrapper::barrier();
+		fflush(stdout);
+		std::cout<<"------------------------------------------------------------------------------------------"<<std::endl;
+		compareEdgeLengthHistogram(*histogramCountBins,*histogramCountBins_SingleProc,0.00000001);
+		compareEdgeLengthHistogram(*histogramWidthBins,*histogramWidthBins_SingleProc,0.00000001);
+	}
+	catch(std::string err)
+	{
+		std::cout<<"Err:"<<err<<std::endl;
+	}
+}
+
+
 
 void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 {
@@ -364,7 +436,7 @@ int main(int argument_count, char* arguments[]) {
 
 	MPIWrapper::init(argument_count, arguments);
 
-	test_areaConnectivityStrength(input_directory);
+	test_histogram(input_directory);
 	//test_GraphPropertyAlgorithmsSingleProc(input_directory);
 
 	MPIWrapper::finalize();
