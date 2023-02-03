@@ -1037,6 +1037,187 @@ double GraphProperty::computeModularity
     return (static_cast<double>(global_adjacency_sum) + global_in_out_degree_node_sum)/static_cast<double>(global_m);
 }
 
+double GraphProperty::computeModularitySingleProc
+(
+    const DistributedGraph& graph
+)
+{
+    // Define all relevant local variables
+    unsigned int resultToRank = 0;
+    const int& my_rank = MPIWrapper::get_my_rank();
+    const int& number_ranks = MPIWrapper::get_number_ranks();
+    const int& number_local_nodes = graph.get_number_local_nodes();
+    std::vector<uint64_t> node_numbers = MPIWrapper::all_gather(graph.get_number_local_nodes());
+    const std::vector<std::string> area_names = graph.get_local_area_names();
+    const int& number_area_names = area_names.size();
+    MPIWrapper::barrier();
+    
+    // ========== GET AREA NAMES TO SINGLE COMPUTATION RANK ==========
+
+    // Create local transmit_area_names_string and area_names_char_len vectors
+    std::vector<int> area_names_char_len;
+    std::vector<char> transmit_area_names_string;
+    for(const std::string& name : area_names)
+    {
+        for(int i = 0; i < name.size(); i++)
+        {
+            transmit_area_names_string.push_back(name[i]);
+        }
+        area_names_char_len.push_back(name.size());
+    }
+    MPIWrapper::barrier();
+    
+    // Gather rank_to_number_area_names vector as helper for char_len_displ (and global_area_names_char_len)
+    assert(area_names_char_len.size() == number_area_names); //debug
+    int nbr_area_names = area_names.size();
+    std::vector<int> rank_to_number_area_names;
+    if(my_rank == resultToRank)
+    {
+        rank_to_number_area_names.resize(number_ranks);
+    }
+    MPIWrapper::gather<int>(&nbr_area_names, rank_to_number_area_names.data(), 1, MPI_INT, resultToRank);
+    MPIWrapper::barrier();
+
+    // Crate char_len_displ as helper for global_area_names_char_len 
+    // and prepare global_area_names_char_len with correct size
+    std::vector<int> char_len_displ;
+    std::vector<int> global_area_names_char_len;
+    if(my_rank == resultToRank)
+    {
+        char_len_displ.resize(number_ranks);
+        int displacement = 0;
+        
+        for(int r = 0; r < number_ranks; r++)
+        {
+            char_len_displ[r] = displacement;
+            displacement += rank_to_number_area_names[r];
+        }
+        global_area_names_char_len.resize(displacement);
+    }
+    MPIWrapper::barrier();
+
+    // Gather global_area_names_char_len (with Help of char_len_displ and rank_to_number_area_names)
+    MPIWrapper::gatherv<int>(area_names_char_len.data(), nbr_area_names,
+                            global_area_names_char_len.data(), rank_to_number_area_names.data(), char_len_displ.data(),
+                            MPI_INT, resultToRank);
+    MPIWrapper::barrier();
+
+    // Finally create rank_to_area_names_char_len as helper for rank_to_area_names
+    std::vector<std::vector<int>> rank_to_area_names_char_len;
+    if(my_rank==resultToRank)
+    {
+        rank_to_area_names_char_len.resize(number_ranks);
+        for(int r = 0; r < number_ranks-1; r++)
+        {
+            for(int l = char_len_displ[r]; l < char_len_displ[r+1]; l++)
+            {
+                rank_to_area_names_char_len[r].push_back(global_area_names_char_len[l]);
+            }
+        }
+        for(int l = char_len_displ[number_ranks-1]; l < global_area_names_char_len.size(); l++)
+        {
+            rank_to_area_names_char_len[number_ranks-1].push_back(global_area_names_char_len[l]);
+        }
+    }
+    MPIWrapper::barrier();
+
+    // Gather rank_to_string_len as helper for char_displ
+    int nbr_string_chars = transmit_area_names_string.size();
+    std::vector<int> rank_to_string_len;
+    if(my_rank == resultToRank)
+    {
+        rank_to_string_len.resize(number_ranks);
+    }
+    MPIWrapper::gather<int>(&nbr_string_chars, rank_to_string_len.data(), 1, MPI_INT, resultToRank);
+    MPIWrapper::barrier();
+
+    // Create char_displ as helper for rank_to_area_names
+    std::vector<int> char_displ;
+    if(my_rank == resultToRank)
+    {
+        char_displ.resize(number_ranks);
+        int displacement = 0;
+        for(int r = 0; r < number_ranks; r++)
+        {
+                char_displ[r] = displacement;
+                displacement += rank_to_string_len[r];
+        }
+    }
+    MPIWrapper::barrier();
+
+    // Prepare and gather global_area_names_string as helper for rank_to_area_names
+    std::vector<char> global_area_names_string;
+    if(my_rank == resultToRank)
+    {
+        int sum = std::accumulate(rank_to_string_len.begin(),
+                                    rank_to_string_len.end(), 0);
+        global_area_names_string.resize(sum);
+    }
+    MPIWrapper::gatherv<char>(transmit_area_names_string.data(), nbr_string_chars,
+                              global_area_names_string.data(), rank_to_string_len.data(), char_displ.data(),
+                              MPI_CHAR, resultToRank);
+    MPIWrapper::barrier();
+    
+    // Finally create rank_to_area_names
+    std::vector<std::vector<std::string>> rank_to_area_names;
+    if(my_rank == resultToRank)
+    {
+        rank_to_area_names.resize(number_ranks);
+        int displacement = 0;
+        for(int r = 0; r < rank_to_area_names_char_len.size(); r++)
+        {
+            for(int l = 0; l < rank_to_area_names_char_len[r].size(); l++)
+            {
+                std::string name(&global_area_names_string[displacement],
+                                 rank_to_area_names_char_len[r][l]);
+                rank_to_area_names[r].push_back(name);
+                displacement += rank_to_area_names_char_len[r][l];
+            }
+        }
+    }
+    MPIWrapper::barrier();
+
+    // ========== LET SINGLE RANK COMPUTE MODULARITY ==========
+    double result;
+
+    std::uint64_t local_m = number_local_nodes;
+    std::uint64_t m = MPIWrapper::all_reduce<std::uint64_t>(local_m, MPI_UINT64_T, MPI_SUM);
+
+    // Computation is performed by a single process:
+    if(my_rank == resultToRank)
+    {
+        double sum = 0.0;
+        // Iterate over each rank...
+        for(int r = 0; r < number_ranks; r++)
+        {
+            // ...and over each node from that rank
+            for(int n = 0; n < node_numbers[r]; n++)
+            {
+                int ki_in = graph.get_in_edges(r, n).size();
+                // Consider each ingoing edge...
+                const std::vector<InEdge>& iEdges = graph.get_in_edges(r, n);
+                for(const InEdge& iEdge : iEdges)
+                {   
+                    // ...and find out if neighbour node is in same area
+                    std::uint64_t target_area_localID = graph.get_node_area_localID(r, n);
+                    std::uint64_t source_area_localID = graph.get_node_area_localID(iEdge.source_rank, iEdge.source_id);
+                    std::string target_area_str = rank_to_area_names[r][target_area_localID];
+                    std::string source_area_str = rank_to_area_names[iEdge.source_rank][source_area_localID];
+
+                    if(target_area_str == source_area_str){
+                        int kj_out = graph.get_out_edges(iEdge.source_rank, iEdge.source_id).size();
+                        sum += 1 - (ki_in * kj_out)/m;
+                    }
+                }
+            }
+        }
+        result = sum/m;
+        // Print out AreaConnecMap:
+        std::cout << "Modularity (serial): " << result << std::endl;
+    }
+    return result;
+}
+
 std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
 (
     const DistributedGraph& graph,

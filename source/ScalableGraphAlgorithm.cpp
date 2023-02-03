@@ -325,6 +325,7 @@ void test_GraphPropertyAlgorithmsSingleProc(std::filesystem::path input_director
 	//std::unique_ptr<GraphProperty::AreaConnecMap> areaConnect;
 	std::unique_ptr<GraphProperty::Histogram> histogramCountBins;
 	std::unique_ptr<GraphProperty::Histogram> histogramWidthBins;
+	double modularity;
 	try{
 		/*if(my_rank == 0) std::cout << "areaConnectivityStrengthSingleProc: " << std::endl;
 		auto areaConnect = GraphProperty::areaConnectivityStrengthSingleProc(dg);*/
@@ -339,6 +340,10 @@ void test_GraphPropertyAlgorithmsSingleProc(std::filesystem::path input_director
 		histogramWidthBins = GraphProperty::edgeLengthHistogramm_constBinWidth(dg,2.0);
 		MPIWrapper::barrier();
 		if(my_rank == 0) compareEdgeLengthHistogram(*histogramWidthBins, *histogramWidthBins, 0.5); //nonsensical test :)
+		MPIWrapper::barrier();
+
+		if(my_rank == 0) std::cout << "computeModularitySingleProc: " << std::endl;
+		modularity =  GraphProperty::computeModularitySingleProc(dg);
 		MPIWrapper::barrier();
 	}
 	catch(std::string err)

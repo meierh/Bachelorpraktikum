@@ -71,6 +71,11 @@ public:
     (
         const DistributedGraph& graph
     );
+
+    static double computeModularitySingleProc
+    (
+        const DistributedGraph& graph
+    );
     
 private:
     using AreaLocalID = std::pair<std::uint64_t,std::uint64_t>;
