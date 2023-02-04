@@ -397,11 +397,13 @@ void test_GraphPropertyAlgorithmsSingleProc(std::filesystem::path input_director
 	//std::unique_ptr<GraphProperty::AreaConnecMap> areaConnect;
 	std::unique_ptr<GraphProperty::Histogram> histogramCountBins;
 	std::unique_ptr<GraphProperty::Histogram> histogramWidthBins;
-	double modularity;
+	double modularityPar;
+	double modularitySer;
 	try{
 		/*if(my_rank == 0) std::cout << "areaConnectivityStrengthSingleProc: " << std::endl;
 		auto areaConnect = GraphProperty::areaConnectivityStrengthSingleProc(dg);*/
 		
+		/*
 		if(my_rank == 0) std::cout << "edgeLengthHistogram_constBinCount: " << std::endl;
 		histogramCountBins = GraphProperty::edgeLengthHistogramm_constBinCount(dg,50);
 		MPIWrapper::barrier();
@@ -413,9 +415,15 @@ void test_GraphPropertyAlgorithmsSingleProc(std::filesystem::path input_director
 		MPIWrapper::barrier();
 		if(my_rank == 0) compareEdgeLengthHistogram(*histogramWidthBins, *histogramWidthBins, 0.5); //nonsensical test :)
 		MPIWrapper::barrier();
+		*/
 
 		if(my_rank == 0) std::cout << "computeModularitySingleProc: " << std::endl;
-		modularity =  GraphProperty::computeModularitySingleProc(dg);
+		modularitySer =  GraphProperty::computeModularitySingleProc(dg);
+		MPIWrapper::barrier();
+
+		if(my_rank == 0) std::cout << "computeModularity: " << std::endl;
+		modularityPar =  GraphProperty::computeModularity(dg);
+		if(my_rank == 0) std::cout << "Modularity (parallel): " << modularityPar << std::endl;
 		MPIWrapper::barrier();
 	}
 	catch(std::string err)

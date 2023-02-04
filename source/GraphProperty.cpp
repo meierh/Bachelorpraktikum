@@ -1283,7 +1283,7 @@ double GraphProperty::computeModularitySingleProc
 
                     if(target_area_str == source_area_str){
                         int kj_out = graph.get_out_edges(iEdge.source_rank, iEdge.source_id).size();
-                        sum += 1 - (ki_in * kj_out)/m;
+                        sum += 1 - static_cast<double>((ki_in * kj_out))/m;
                     }
                 }
             }
