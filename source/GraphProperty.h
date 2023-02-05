@@ -9,11 +9,11 @@
 #include <functional>
 #include <stdexcept>
 #include <cassert>  // debug
+#include <chrono>
 
 class GraphProperty {
 public:
-    
-    
+
     /*|||------------------areaConnectivityStrength--------------------------
      *
      * Foreach combination of areas A and B, the function sums the weight
@@ -45,17 +45,40 @@ public:
     static bool compare_area_connecs(std::unique_ptr<AreaConnecMap> const &map1, std::unique_ptr<AreaConnecMap> const &map2, unsigned int resultToRank=0);
     static bool compare_area_connecs_alt(std::unique_ptr<AreaConnecMap> const &map1, std::unique_ptr<AreaConnecMap> const &map2, unsigned int resultToRank=0);
 
-    
-    /*|||------------------------Histogramm--------------------------------
-    /* Histogram for count inside interval greater equal the lower and smaller than the upper bound
+
+    /*|||-----------------------Histogram--------------------------------
+     *
+     * Functions to compute the length of all edges and to count them in 
+     * a length histogram
+     *
+     * Returns: Histogram {std::vector of pairs with the bin borders in 
+     *                      the first and the count of edges in this bin}
      */
     using Histogram = std::vector<std::pair<std::pair<double,double>,std::uint64_t>>;
+    /*
+     * Version of Histogram method that creates a histogram with a given
+     * width of bins 
+     * 
+     * Parameters 
+     * graph:           A DistributedGraph (Function is MPI compliant)
+     * bin_width:       Width of the bin in the resulting histogram
+     * resultToRank:    MPI Rank to receive the results
+     */
     static std::unique_ptr<Histogram> edgeLengthHistogramm_constBinWidth
     (
         const DistributedGraph& graph,
         double bin_width,
         unsigned int resultToRank=0
     );
+    /*
+     * Version of Histogram method that creates a histogram with a given
+     * number of bins 
+     * 
+     * Parameters 
+     * graph:           A DistributedGraph (Function is MPI compliant)
+     * bin_count:       Number of bins in the resulting histogram
+     * resultToRank:    MPI Rank to receive the results
+     */
     static std::unique_ptr<Histogram> edgeLengthHistogramm_constBinCount
     (
         const DistributedGraph& graph,
@@ -74,7 +97,7 @@ public:
         std::uint64_t bin_count,
         unsigned int resultToRank=0
     );
-    
+    /*-------------------------Histogram----------------------------------|||*/
     
     static std::vector<long double> networkTripleMotifs
     (

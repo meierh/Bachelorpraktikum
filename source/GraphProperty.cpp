@@ -8,8 +8,10 @@ std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStr
 {
 // Test function parameters
     const int number_of_ranks = MPIWrapper::get_number_ranks();
-    //if(resultToRank>=number_of_ranks)             // couldn't compile exception so temporaly commented out
-        //throw std::exception("Bad parameter");
+    if(resultToRank>=number_of_ranks)
+    {
+        throw std::invalid_argument("Bad parameter - resultToRank:"+resultToRank);
+    }
     
 // Build local area connection map
     const int my_rank = MPIWrapper::get_my_rank();
@@ -468,6 +470,16 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
     unsigned int resultToRank
 )
 {
+    const int number_of_ranks = MPIWrapper::get_number_ranks();
+    if(resultToRank>=number_of_ranks)
+    {
+        throw std::invalid_argument("Bad parameter - resultToRank"+resultToRank);
+    }
+    if(bin_width<=0)
+    {
+        throw std::invalid_argument("Bad parameter - bin_width");
+    }
+        
     std::function<std::unique_ptr<Histogram>(double,double)> bin_width_histogram_creator =
     [=](double min_length, double max_length)
     {
@@ -487,13 +499,6 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
             (*histogram)[i].second = 0;
             start_length = start_length+bin_width;
         }
-        /*
-        // Print out histogram dimensions:
-        std::cout << "number of bins: " << number_bins << std::endl;
-        std::cout << "bin width: " << bin_width << " (span length: " << span_length << ")" << std::endl;
-        std::cout << "min edge length: " << min_length << " (bin start: " << (*histogram)[0].first.first << ")" << std::endl;
-        std::cout << "max edge length: " << max_length << " (bin end: " << (*histogram)[number_bins-1].first.second << ")" << std::endl;
-        */
         return std::move(histogram);
     };
     return std::move(edgeLengthHistogramm(graph,bin_width_histogram_creator,resultToRank));
@@ -506,8 +511,15 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
     unsigned int resultToRank
 )
 {
+    const int number_of_ranks = MPIWrapper::get_number_ranks();
+    if(resultToRank>=number_of_ranks)
+    {
+        throw std::invalid_argument("Bad parameter - resultToRank"+resultToRank);
+    }
     if(bin_count<1)
-        throw std::invalid_argument("Number of bins must be greater than zero");
+    {
+        throw std::invalid_argument("Bad parameter - bin_count"+bin_count);
+    }
     
     std::function<std::unique_ptr<Histogram>(double,double)> bin_count_histogram_creator =
     [=](double min_length, double max_length)
@@ -524,13 +536,6 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
             (*histogram)[i].second = 0;
             start_length = start_length+bin_width;
         }
-        /*
-        // Print out histogram dimensions:
-        std::cout << "number of bins: " << bin_count << std::endl;
-        std::cout << "bin width: " << bin_width << " (span length: " << span_length << ")" << std::endl;
-        std::cout << "min edge length: " << min_length << " (bin start: " << (*histogram)[0].first.first << ")" << std::endl;
-        std::cout << "max edge length: " << max_length << " (bin end: " << (*histogram)[bin_count-1].first.second << ")" << std::endl;
-        */
         return std::move(histogram);
     };
     return std::move(edgeLengthHistogramm(graph,bin_count_histogram_creator,resultToRank));
@@ -886,6 +891,7 @@ double GraphProperty::computeModularity
     const std::vector<std::string>& area_names = graph.get_local_area_names();
     int lookRank=4;
     
+//Gather area names to all ranks
     std::function<std::unique_ptr<std::vector<std::pair<std::string,int>>>(const DistributedGraph&)> 
         getData = [&](const DistributedGraph& dg)
         {
@@ -905,31 +911,8 @@ double GraphProperty::computeModularity
         [](std::vector<char>area_name_v){return std::string(area_name_v.data(),area_name_v.size());},
         MPI_CHAR
     );
-    
-    /*
-    if(my_rank==lookRank)
-    {
-        std::cout<<"Rank:"<<my_rank<<"  size:"<<area_names.size()<<std::endl;
-        for(int i=0;i<area_names.size();i++)
-            std::cout<<" "<<area_names[i]; 
-        std::cout<<std::endl;    
-        fflush(stdout);
-    }
-
-    MPIWrapper::barrier();
-    if(my_rank==0)
-    {
-        std::cout<<"Rank:"<<lookRank<<"  size:"<<(*area_names_list_of_ranks)[lookRank].size()<<std::endl;
-        for(int i=0;i<(*area_names_list_of_ranks)[lookRank].size();i++)
-            std::cout<<" "<<(*area_names_list_of_ranks)[lookRank][i];    
-    }
-    std::cout<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();
-    */
-
-    
-    //Create global name indices
+        
+//Create global area name indices
     std::unordered_map<std::string,std::uint64_t> area_names_map;
     std::vector<std::string> area_names_list;
     for(std::vector<std::string>& rank_names : *area_names_list_of_ranks)
@@ -943,16 +926,10 @@ double GraphProperty::computeModularity
             }
         }
     }
+    std::cout<<"Rank:"<<my_rank<<" got "<<area_names_list.size()<<" areas"<<std::endl;
+
     
-    /*
-    std::cout<<"Rank:"<<my_rank<<"  size:"<<area_names_list.size()<<std::endl;
-    for(int i=0;i<area_names_list.size();i++)
-        std::cout<<" "<<area_names_list[i]; 
-    std::cout<<std::endl;    
-    fflush(stdout);
-    */
-    
-    //Create rank local area distance sum
+//Create rank local area distance sum
     std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>>>
                  (const DistributedGraph& dg,std::uint64_t node_local_ind)>
         collect_adjacency_area_info = [&](const DistributedGraph& dg,std::uint64_t node_local_ind)
@@ -1068,6 +1045,10 @@ double GraphProperty::computeModularity
                                                                  modulInfo_v.begin(),modulInfo_v.end());});
         }
     }
+    std::cout<<"Rank:"<<my_rank<<" got "<<local_areaGlobalID_to_node.size()<<" areas to compute"<<std::endl;
+    std::cout<<"Rank:"<<my_rank<<" got area 0 with "<<local_areaGlobalID_to_node[0].size()<<" nodes to compute"<<std::endl;
+    std::cout<<"Rank:"<<my_rank<<" got area 0 node 0 with "<<local_areaGlobalID_to_node[0][0].node_in_degree<<" and "<<local_areaGlobalID_to_node[0][0].node_out_degree<<" and "<<local_areaGlobalID_to_node[0][0].area_global_ID<<std::endl;
+    
     MPIWrapper::barrier();
     std::cout<<"Rank:"<<my_rank<<"  local_areaGlobalID_to_node.size():"<<local_areaGlobalID_to_node.size()<<std::endl;
     MPIWrapper::barrier();
@@ -1077,20 +1058,23 @@ double GraphProperty::computeModularity
     std::uint64_t global_m = MPIWrapper::all_reduce<std::uint64_t>(local_m,MPI_UINT64_T,MPI_SUM);
 
     double local_in_out_degree_node_sum = 0;
+    std::uint64_t local_in_degree_node_sum = 0;
+    std::uint64_t local_out_degree_node_sum = 0;
     for(std::vector<nodeModularityInfo>& nodes_of_area : local_areaGlobalID_to_node)
     {
         for(int i=0;i<nodes_of_area.size();i++)
         {
             for(int j=0;j<nodes_of_area.size();j++)
             {
-                if(i!=j)
-                {
-                    assert(nodes_of_area[i].area_global_ID==nodes_of_area[j].area_global_ID);
-                    local_in_out_degree_node_sum+=static_cast<double>(-1*(nodes_of_area[i].node_in_degree*nodes_of_area[j].node_out_degree))/global_m;
-                }
+                assert(nodes_of_area[i].area_global_ID==nodes_of_area[j].area_global_ID);
+                local_in_degree_node_sum += nodes_of_area[i].node_in_degree;
+                local_out_degree_node_sum += nodes_of_area[i].node_out_degree;
+                local_in_out_degree_node_sum+=-1*static_cast<double>((nodes_of_area[i].node_in_degree*nodes_of_area[j].node_out_degree))/global_m;
             }
         }
     }
+    
+    
     MPIWrapper::barrier();
     std::cout<<"Rank:"<<my_rank<<"  local_in_out_degree_node_sum:"<<local_in_out_degree_node_sum<<std::endl;
     MPIWrapper::barrier();
@@ -1259,11 +1243,14 @@ double GraphProperty::computeModularitySingleProc
 
     std::uint64_t local_m = number_local_nodes;
     std::uint64_t m = MPIWrapper::all_reduce<std::uint64_t>(local_m, MPI_UINT64_T, MPI_SUM);
+    std::cout<<"singleProc global m:"<<m<<std::endl;
 
     // Computation is performed by a single process:
     if(my_rank == resultToRank)
     {
         double sum = 0.0;
+        double sum_a = 0.0;
+        double sum_ki_kj_div_m = 0.0;
         // Iterate over each rank...
         for(int r = 0; r < number_ranks; r++)
         {
@@ -1284,11 +1271,15 @@ double GraphProperty::computeModularitySingleProc
                     if(target_area_str == source_area_str){
                         int kj_out = graph.get_out_edges(iEdge.source_rank, iEdge.source_id).size();
                         sum += 1 - static_cast<double>((ki_in * kj_out))/m;
+                        sum_a+=1;
+                        sum_ki_kj_div_m += -1*static_cast<double>((ki_in * kj_out))/m;
                     }
                 }
             }
         }
         result = sum/m;
+        std::cout<<"singleProc global sum_a:"<<sum_a<<std::endl;
+        std::cout<<"singleProc global sum_ki_kj_div_m:"<<sum_ki_kj_div_m<<std::endl;
         // Print out AreaConnecMap:
         std::cout << "Modularity (serial): " << result << std::endl;
     }
@@ -1528,13 +1519,16 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
     std::function<A_parameter(const DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
 )
 {
+    std::vector<double> times;
+    std::vector<std::string> code_names = {"GenQuestion","DistrNumbers","DistrQuestions","SetQuestions","CompAnswers",
+                                            "SendAnswers","SetAnswers"};
+    auto start = std::chrono::steady_clock::now(); 
+
     const int my_rank = MPIWrapper::get_my_rank();
     const int number_ranks = MPIWrapper::get_number_ranks();
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
     
-    //std::cout<<"Line 1094 from process:"<<my_rank<<std::endl;
-    
-    // Create Questioners structure
+// Collect Questions and create Questioners structure
     auto questioner_structure = std::make_unique<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>>();
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
     {
@@ -1542,41 +1536,11 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
     }
     questioner_structure->finalizeAddingQuestionsToSend();
     
-    /*
-    for(int index=0; index<questioner_structure->list_index_to_adressee_rank.size(); index++)
-    {
-        int targetRank = questioner_structure->list_index_to_adressee_rank[index];
-        for(int j=0;j<questioner_structure->nodes_to_ask_question[index].size();j++)
-        {
-            int targetNode = questioner_structure->nodes_to_ask_question[index][j];
-            int sourceNode = questioner_structure->nodes_that_ask_the_question[index][j];
-            threeMotifStructure struc = questioner_structure->question_parameters[index][j];
-            assert(struc.node_1_rank==my_rank);
-            assert(struc.node_1_local==sourceNode);
-            assert(struc.node_2_rank==targetRank);
-            assert(struc.node_2_local==targetNode);
+    times.push_back(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count());
+    start = std::chrono::steady_clock::now(); 
             
-        }
-    }
-    */
-    
-    //std::cout<<"Line 1103 from process:"<<my_rank<<std::endl;
-    
-    // Distribute number of questions to each rank
+// Distribute number of questions to each rank
     std::vector<int>& send_ranks_to_nbrOfQuestions = questioner_structure->get_adressee_ranks_to_nbrOfQuestions();
-    
-    /*
-    MPIWrapper::barrier();
-    //std::cout<<"send_ranks_to_nbrOfQuestions  Rank:"<<my_rank<<"  ";
-    for(int nbrToRank: send_ranks_to_nbrOfQuestions)
-    {
-        std::cout<<nbrToRank<<"  ";
-    }
-    std::cout<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();
-    */
-    
     std::vector<int> global_ranks_to_nbrOfQuestions(number_ranks*number_ranks);    
     std::vector<int> destCounts_ranks_to_nbrOfQuestions(number_ranks,number_ranks);
     std::vector<int> displ_ranks_to_nbrOfQuestions(number_ranks);
@@ -1587,14 +1551,10 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
     MPIWrapper::all_gatherv<int>(send_ranks_to_nbrOfQuestions.data(), number_ranks,
                                 global_ranks_to_nbrOfQuestions.data(), destCounts_ranks_to_nbrOfQuestions.data(), displ_ranks_to_nbrOfQuestions.data(), MPI_INT);
 
-    /*
-    MPIWrapper::barrier();
-    std::cout<<"Line 1117 from process:"<<my_rank<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();
-    */
+    times.push_back(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count());
+    start = std::chrono::steady_clock::now(); 
     
-    // Distribute questions to each rank
+// Distribute questions to each rank
     std::vector<int> recv_ranks_to_nbrOfQuestions(number_ranks);
     for(int rank=0;rank<recv_ranks_to_nbrOfQuestions.size();rank++)
     {
@@ -1619,36 +1579,6 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
         assert(nodes_to_ask_question_for_rank.size()==question_parameters_for_rank.size());
         int count = nodes_to_ask_question_for_rank.size();
         
-        /*
-        for(int j=0;j<nodes_to_ask_question_for_rank.size();j++)
-        {
-            int targetNode = nodes_to_ask_question_for_rank[j];
-            
-            threeMotifStructure struc = question_parameters_for_rank[j];
-            assert(struc.node_1_rank==my_rank);
-            assert(struc.node_2_rank==rank);
-            assert(struc.node_2_local==targetNode);
-        }
-        */
-        
-        /*
-        MPIWrapper::barrier();
-        std::cout<<"Rank:"<<my_rank<<" - "<<count<<std::endl;
-        fflush(stdout);
-        MPIWrapper::barrier();
-        if(my_rank==rank)
-        {
-            std::cout<<"Rank:"<<my_rank<<" -- ";
-            for(int nbrToRank: recv_ranks_to_nbrOfQuestions)
-            {
-                std::cout<<nbrToRank<<"  ";
-            }
-            std::cout<<std::endl;
-        }
-        fflush(stdout);
-        MPIWrapper::barrier();
-        */
-        
         MPIWrapper::gatherv<std::uint64_t>(nodes_to_ask_question_for_rank.data(), count,
                                            my_rank_total_nodes_to_ask_question.data(),
                                            recv_ranks_to_nbrOfQuestions.data(), displ_recv_ranks_to_nbrOfQuestions.data(),MPI_UINT64_T,rank);
@@ -1658,32 +1588,24 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
                                          recv_ranks_to_nbrOfQuestions.data(), displ_recv_ranks_to_nbrOfQuestions.data(),MPI_Q_parameter,rank);
     }
     
-    MPIWrapper::barrier();
-    std::cout<<"Line 1423 from process:"<<my_rank<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();
-    //throw std::string("1419");
+    times.push_back(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count());
+    start = std::chrono::steady_clock::now(); 
 
-    // Create Adressees structure
+// Set questions to be answered to adressees questioner structure
     GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter> adressee_structure;
     adressee_structure.setQuestionsReceived(my_rank_total_nodes_to_ask_question,my_rank_total_question_parameters,
                                             recv_ranks_to_nbrOfQuestions,displ_recv_ranks_to_nbrOfQuestions);
     
-    MPIWrapper::barrier();
-    std::cout<<"Line 1434 from process:"<<my_rank<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();
-    //throw std::string("1437");
+    times.push_back(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count());
+    start = std::chrono::steady_clock::now(); 
     
-    // Compute the answers
+// Compute the answers to questions
     adressee_structure.computeAnswersToQuestions(graph,generateAnswers);
     
-    MPIWrapper::barrier();
-    std::cout<<"Line 1443 from process:"<<my_rank<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();
+    times.push_back(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count());
+    start = std::chrono::steady_clock::now(); 
     
-    // Distribute answers to each rank
+// Send answers back to questioners
     std::vector<int>& send_ranks_to_nbrOfAnswers =  questioner_structure->get_adressee_ranks_to_nbrOfQuestions();
     std::vector<int> displ_send_ranks_to_nbrOfAnswers(number_ranks,0);
     for(int index = 1;index<displ_send_ranks_to_nbrOfAnswers.size();index++)
@@ -1707,19 +1629,22 @@ std::unique_ptr<GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_paramet
                                          send_ranks_to_nbrOfAnswers.data(), displ_send_ranks_to_nbrOfAnswers.data(),MPI_A_parameter,rank);
     }
     
-    MPIWrapper::barrier();
-    std::cout<<"Line 1473 from process:"<<my_rank<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();
+    times.push_back(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count());
+    start = std::chrono::steady_clock::now(); 
     
+// Set answers questioner structure
     questioner_structure->setAnswers(my_rank_total_answer_parameters,send_ranks_to_nbrOfAnswers,
                                     displ_send_ranks_to_nbrOfAnswers);
 
-    MPIWrapper::barrier();
-    std::cout<<"Line 1482 from process:"<<my_rank<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();
-    //throw std::string("1485");
+    times.push_back(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count());
+    start = std::chrono::steady_clock::now(); 
+    
+    std::cout<<"Rank:"<<my_rank<<"[ ";
+    for(int i=0;i<times.size();i++)
+    {
+        std::cout<<" "<<code_names[i]<<":"<<times[i]<<" ";
+    }
+    std::cout<<"]"<<std::endl;
     
     return std::move(questioner_structure);
 }
@@ -1927,7 +1852,7 @@ void GraphProperty::NodeToNodeQuestionStructure<Q_parameter,A_parameter>::comput
             Q_parameter para = question_parameters[i][j];
             answers_to_questions[i][j] = generateAnswers(dg,node_local_ind,para);
         }            
-        std::cout<<"Rank:"<<MPIWrapper::get_my_rank()<<"  "<<i<<"/"<<question_parameters.size()<<"  Generated answer for:"<<answers_to_questions[i].size()<<std::endl; 
+        //std::cout<<"Rank:"<<MPIWrapper::get_my_rank()<<"  "<<i<<"/"<<question_parameters.size()<<"  Generated answer for:"<<answers_to_questions[i].size()<<std::endl; 
     }
 }
 

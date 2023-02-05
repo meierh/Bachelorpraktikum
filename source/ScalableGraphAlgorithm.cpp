@@ -357,7 +357,25 @@ void test_histogram(std::filesystem::path input_directory)
 	}
 }
 
+void test_modularity(std::filesystem::path input_directory)
+{
+	const auto my_rank = MPIWrapper::get_my_rank();
+	DistributedGraph dg(input_directory);
+	MPIWrapper::barrier();
+	
+	double modularityPar,modularitySeq;
 
+	try{
+		modularityPar = GraphProperty::computeModularity(dg);
+		modularitySeq = GraphProperty::computeModularitySingleProc(dg);
+		if(my_rank==0)
+			std::cout<<"modularityPar:"<<modularityPar<<" modularitySeq:"<<modularitySeq<<std::endl;
+	}
+	catch(std::string err)
+	{
+		std::cout<<"Err:"<<err<<std::endl;
+	}
+}
 
 void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 {
@@ -444,7 +462,7 @@ int main(int argument_count, char* arguments[]) {
 
 	MPIWrapper::init(argument_count, arguments);
 
-	test_histogram(input_directory);
+	test_modularity(input_directory);
 	//test_GraphPropertyAlgorithmsSingleProc(input_directory);
 
 	MPIWrapper::finalize();
