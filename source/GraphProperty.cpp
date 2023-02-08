@@ -1249,37 +1249,41 @@ double GraphProperty::computeModularitySingleProc
     if(my_rank == resultToRank)
     {
         double sum = 0.0;
-        double sum_a = 0.0;
-        double sum_ki_kj_div_m = 0.0;
-        // Iterate over each rank...
-        for(int r = 0; r < number_ranks; r++)
+        
+        for(int ir = 0; ir < number_ranks; ir++)
         {
-            // ...and over each node from that rank
-            for(int n = 0; n < node_numbers[r]; n++)
+            for(int i = 0; i < node_numbers[ir]; i++)
             {
-                int ki_in = graph.get_in_edges(r, n).size();
-                // Consider each ingoing edge...
-                const std::vector<InEdge>& iEdges = graph.get_in_edges(r, n);
-                for(const InEdge& iEdge : iEdges)
-                {   
-                    // ...and find out if neighbour node is in same area
-                    std::uint64_t target_area_localID = graph.get_node_area_localID(r, n);
-                    std::uint64_t source_area_localID = graph.get_node_area_localID(iEdge.source_rank, iEdge.source_id);
-                    std::string target_area_str = rank_to_area_names[r][target_area_localID];
-                    std::string source_area_str = rank_to_area_names[iEdge.source_rank][source_area_localID];
-
-                    if(target_area_str == source_area_str){
-                        int kj_out = graph.get_out_edges(iEdge.source_rank, iEdge.source_id).size();
-                        sum += 1 - static_cast<double>((ki_in * kj_out))/m;
-                        sum_a+=1;
-                        sum_ki_kj_div_m += -1*static_cast<double>((ki_in * kj_out))/m;
+                std::uint64_t i_area_localID = graph.get_node_area_localID(ir, i);
+                std::string i_area_str = rank_to_area_names[ir][i_area_localID];
+                int ki_in = graph.get_in_edges(ir, i).size();
+                const std::vector<OutEdge>& i_out_edges = graph.get_out_edges(ir, i);
+                for(int jr = 0; jr < number_ranks; jr++)
+                {
+                    for(int j = 0; j < node_numbers[jr]; j++)
+                    {
+                        
+                        std::uint64_t j_area_localID = graph.get_node_area_localID(jr, j);
+                        std::string j_area_str = rank_to_area_names[jr][j_area_localID];
+                        if(i_area_str == j_area_str)
+                        {
+                            int kj_out = graph.get_out_edges(jr, j).size();
+                            int a_ij = 0; 
+                            for(const OutEdge& i_out_edge : i_out_edges)
+                            { 
+                                if(i_out_edge.target_rank == jr && i_out_edge.target_id == j){
+                                    a_ij = 1;
+                                }
+                            }
+                            sum += a_ij - static_cast<double>((ki_in * kj_out))/m;
+                        }
                     }
                 }
             }
+            std::cout << "i_rank(" << ir << "/" << number_ranks << ") with " << node_numbers[ir] << " nodes" << std::endl; 
         }
         result = sum/m;
-        std::cout<<"singleProc global sum_a:"<<sum_a<<std::endl;
-        std::cout<<"singleProc global sum_ki_kj_div_m:"<<sum_ki_kj_div_m<<std::endl;
+
         // Print out AreaConnecMap:
         std::cout << "Modularity (serial): " << result << std::endl;
     }
