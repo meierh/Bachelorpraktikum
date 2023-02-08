@@ -52,7 +52,7 @@ public:
      * a length histogram
      *
      * Returns: Histogram {std::vector of pairs with the bin borders in 
-     *                      the first and the count of edges in this bin}
+     *                     the first and the count of edges in this bin}
      */
     using Histogram = std::vector<std::pair<std::pair<double,double>,std::uint64_t>>;
     /*
@@ -67,8 +67,8 @@ public:
     static std::unique_ptr<Histogram> edgeLengthHistogramm_constBinWidth
     (
         const DistributedGraph& graph,
-        double bin_width,
-        unsigned int resultToRank=0
+        const double bin_width,
+        const unsigned int resultToRank=0
     );
     /*
      * Version of Histogram method that creates a histogram with a given
@@ -82,8 +82,8 @@ public:
     static std::unique_ptr<Histogram> edgeLengthHistogramm_constBinCount
     (
         const DistributedGraph& graph,
-        std::uint64_t bin_count,
-        unsigned int resultToRank=0
+        const std::uint64_t bin_count,
+        const unsigned int resultToRank=0
     );
     static std::unique_ptr<Histogram> edgeLengthHistogramm_constBinWidthSingleProc
     (
@@ -105,15 +105,26 @@ public:
         unsigned int resultToRank = 0
     );
     
+    /*|||-----------------------Modularity--------------------------------
+     *
+     * Functions to compute the modularity of the graph
+     *
+     * Returns: The Modularity according to paper
+     *  "A tutorial in connectome analysis: Topological and spatial features of brain networks"
+     *  by Marcus Kaiser, 2011 in NeuroImage, (892-907)
+     * 
+     * Parameters 
+     * graph:           A DistributedGraph (Function is MPI compliant)
+     */
     static double computeModularity
     (
         const DistributedGraph& graph
     );
-
     static double computeModularitySingleProc
     (
         const DistributedGraph& graph
     );
+    /*-------------------------Modularity----------------------------------|||*/
     
 private:
     using AreaLocalID = std::pair<std::uint64_t,std::uint64_t>;
@@ -141,8 +152,8 @@ private:
     static std::unique_ptr<Histogram> edgeLengthHistogramm
     (
         const DistributedGraph& graph,
-        std::function<std::unique_ptr<Histogram>(double,double)> histogram_creator,
-        unsigned int resultToRank
+        const std::function<std::unique_ptr<Histogram>(const double,const double)> histogram_creator,
+        const unsigned int resultToRank
     );
 
     /*

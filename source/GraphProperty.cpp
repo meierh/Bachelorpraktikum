@@ -3,7 +3,7 @@
 std::unique_ptr<GraphProperty::AreaConnecMap> GraphProperty::areaConnectivityStrength
 (
     const DistributedGraph& graph,
-    unsigned int resultToRank
+    const unsigned int resultToRank
 )
 {
 // Test function parameters
@@ -466,8 +466,8 @@ bool GraphProperty::compare_area_connecs_alt(std::unique_ptr<GraphProperty::Area
 std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_constBinWidth
 (
     const DistributedGraph& graph,
-    double bin_width,
-    unsigned int resultToRank
+    const double bin_width,
+    const unsigned int resultToRank
 )
 {
     const int number_of_ranks = MPIWrapper::get_number_ranks();
@@ -480,13 +480,19 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
         throw std::invalid_argument("Bad parameter - bin_width");
     }
         
-    std::function<std::unique_ptr<Histogram>(double,double)> bin_width_histogram_creator =
-    [=](double min_length, double max_length)
+    std::function<std::unique_ptr<Histogram>(const double,const double)> bin_width_histogram_creator =
+    [=](const double min_length, const double max_length)
     {
         double span_length = max_length-min_length;
+        if(span_length<=0)
+        {
+            throw std::invalid_argument("Span of edge distribution must be larger than zero!");
+        }
         unsigned int number_bins = std::ceil(span_length/bin_width);
         if(number_bins<1)
+        {
             throw std::invalid_argument("Number of bins must be greater than zero");
+        }
         double two_side_overlap_mult = span_length/bin_width - std::floor(span_length/bin_width);
         double one_side_overlap = (two_side_overlap_mult/2)*bin_width;
         double start_length = min_length-one_side_overlap;
@@ -501,14 +507,15 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
         }
         return std::move(histogram);
     };
+    
     return std::move(edgeLengthHistogramm(graph,bin_width_histogram_creator,resultToRank));
 }
 
 std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_constBinCount
 (
     const DistributedGraph& graph,
-    std::uint64_t bin_count,
-    unsigned int resultToRank
+    const std::uint64_t bin_count,
+    const unsigned int resultToRank
 )
 {
     const int number_of_ranks = MPIWrapper::get_number_ranks();
@@ -521,12 +528,16 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
         throw std::invalid_argument("Bad parameter - bin_count"+bin_count);
     }
     
-    std::function<std::unique_ptr<Histogram>(double,double)> bin_count_histogram_creator =
-    [=](double min_length, double max_length)
+    std::function<std::unique_ptr<Histogram>(const double,const double)> bin_count_histogram_creator =
+    [=](const double min_length, const double max_length)
     {
         double span_length = (max_length-min_length)*1.01; //achieve small overlap
+        if(span_length<=0)
+        {
+            throw std::invalid_argument("Span of edge distribution must be larger than zero!");
+        }
         double bin_width = span_length/bin_count;
-        double start_length = min_length-0.005*(max_length-min_length);
+        double start_length = min_length-0.005*(span_length);
 
         auto histogram = std::make_unique<Histogram>(bin_count);
         for(int i=0;i<bin_count;i++)
@@ -538,6 +549,7 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
         }
         return std::move(histogram);
     };
+    
     return std::move(edgeLengthHistogramm(graph,bin_count_histogram_creator,resultToRank));
 }
 
@@ -1289,14 +1301,19 @@ double GraphProperty::computeModularitySingleProc
 std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
 (
     const DistributedGraph& graph,
-    std::function<std::unique_ptr<Histogram>(double,double)> histogram_creator,
-    unsigned int resultToRank
+    const std::function<std::unique_ptr<Histogram>(const double, const double)> histogram_creator,
+    const unsigned int resultToRank
 )
 {
+// Test function parameters
     const int my_rank = MPIWrapper::get_my_rank();
+    if(resultToRank>=number_of_ranks)
+    {
+        throw std::invalid_argument("Bad parameter - resultToRank:"+resultToRank);
+    }
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
         
-    //Create rank local area distance sum
+//Compute node local edge lengths of OutEdges
     std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,Vec3d>>>
                  (const DistributedGraph& dg,std::uint64_t node_local_ind)>
         transfer_node_position = [&](const DistributedGraph& dg,std::uint64_t node_local_ind)
@@ -1311,18 +1328,17 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
             }
             return std::move(node_position_vec);
         };
-    
     std::function<double(const DistributedGraph& dg,std::uint64_t node_local_ind,Vec3d para)> 
         compute_edge_length = [&](const DistributedGraph& dg,std::uint64_t node_local_ind,Vec3d source_node_pos)
         {
             Vec3d target_node_pos = dg.get_node_position(my_rank,node_local_ind);
             return (source_node_pos-target_node_pos).calculate_p_norm(2);
         };
-        
     std::unique_ptr<NodeToNodeQuestionStructure<Vec3d,double>> edge_length_results=
         node_to_node_question<Vec3d,double>(graph,MPIWrapper::MPI_Vec3d,transfer_node_position,
                                                   MPI_DOUBLE,compute_edge_length);
-    
+
+// Collect edge lengths of edges to local list
     std::vector<double> edge_lengths;    
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
     {
@@ -1331,61 +1347,30 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
         edge_lengths.insert(edge_lengths.end(),length_of_all_edges->begin(),length_of_all_edges->end());
     }
     
+// Compute the smallest and largest edge length globally
     const auto [min_length, max_length] = std::minmax_element(edge_lengths.begin(), edge_lengths.end());
     double global_min_length = *min_length;
-    double global_max_length = *max_length;
-    
-    /*
-    std::cout<<"edge_lengths.size: "<<my_rank<<": "<<edge_lengths.size()<<std::endl;
-    std::cout<<"min_length "<<my_rank<<": "<<global_min_length<<std::endl;
-    std::cout<<"max_length "<<my_rank<<": "<<global_max_length<<std::endl;
-    MPIWrapper::barrier();
-    */
-    
+    double global_max_length = *max_length;    
     global_min_length = MPIWrapper::all_reduce<double>(global_min_length,MPI_DOUBLE,MPI_MIN);
     global_max_length = MPIWrapper::all_reduce<double>(global_max_length,MPI_DOUBLE,MPI_MAX);
     
-    /*
-    MPIWrapper::barrier();
-    std::cout<<"---------------------------------------------------------"<<std::endl;
-    MPIWrapper::barrier();
-    std::cout<<"edge_lengths.size: "<<my_rank<<": "<<edge_lengths.size()<<std::endl;
-    std::cout<<"min_length "<<my_rank<<": "<<global_min_length<<std::endl;
-    std::cout<<"max_length "<<my_rank<<": "<<global_max_length<<std::endl;
-    MPIWrapper::barrier();
-    */
-    
+//Create histogram with local edge data
     std::unique_ptr<Histogram> histogram = histogram_creator(global_min_length,global_max_length);
     std::pair<double,double> span = histogram->front().first;
     double bin_width = span.second - span.first;
-    double startLength = span.first;
-    
-    /*
-    std::cout<<"histogram->size() "<<my_rank<<": "<<histogram->size()<<std::endl;
-    std::cout<<"bin_width "<<my_rank<<": "<<bin_width<<std::endl;
-    std::cout<<"min_length "<<my_rank<<": "<<global_min_length<<std::endl;
-    std::cout<<"max_length "<<my_rank<<": "<<global_max_length<<std::endl;
-    MPIWrapper::barrier();
-    std::cout<<"histogram->front() "<<my_rank<<": "<<"("<<histogram->front().first.first<<","<<histogram->front().first.second<<")"<<std::endl;
-    std::cout<<"histogram->back() "<<my_rank<<": "<<"("<<histogram->back().first.first<<","<<histogram->back().first.second<<")"<<std::endl;
-    */
-
+    assert(bin_width>0);
+    double start_length = span.first;
     for(const double length : edge_lengths)
     {
-        int index = (length-startLength)/bin_width;
+        int index = (length-start_length)/bin_width;
         assert(index<histogram->size());
         assert(index>=0);
-        assert(length >= (*histogram)[index].first.first);
-        assert(length < (*histogram)[index].first.second);
+        assert(length>=(*histogram)[index].first.first);
+        assert(length<(*histogram)[index].first.second);
         (*histogram)[index].second++;
     }
     
-    std::uint64_t number_edges = edge_lengths.size();
-    std::uint64_t total_number_edges = MPIWrapper::all_reduce<std::uint64_t>(number_edges,MPI_UINT64_T,MPI_SUM);
-    
-    MPIWrapper::barrier();
-    //throw std::string("572");
-    
+// Reduce local edge count of histogram to global count        
     std::vector<std::uint64_t> histogram_pure_count_src(histogram->size());
     for(int i=0;i<histogram->size();i++)
     {
@@ -1395,42 +1380,23 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
     if(my_rank==resultToRank)
     {
         histogram_pure_count_dest.resize(histogram->size());
-    }
-    
-    MPIWrapper::barrier();
-    //throw std::string("578");
-    
+    }    
     MPIWrapper::reduce<std::uint64_t>(histogram_pure_count_src.data(),histogram_pure_count_dest.data(),
-                                          histogram->size(),MPI_UINT64_T,MPI_SUM,resultToRank);
-    MPIWrapper::barrier();
-    /*
-    MPIWrapper::barrier();
-    std::cout<<"Rank:"<<my_rank<<" - histogram_pure_count_dest: "<<histogram_pure_count_dest.size()<<" [";
-    for(auto c :histogram_pure_count_dest)
-        std::cout<<c<<" ";
-    std::cout<<"]"<<std::endl;
-    MPIWrapper::barrier();
-    */
-    //throw std::string("589");
+                                      histogram->size(),MPI_UINT64_T,MPI_SUM,resultToRank);
+    
+// Reconstruct resulting histogram with global data
     if(my_rank==resultToRank)
     {
         for(int i=0;i<histogram->size();i++)
         {
             (*histogram)[i].second = histogram_pure_count_dest[i];
         }
-        
-        std::cout<<"total_edge_count_par:"<<total_number_edges<<std::endl;
-        for (int i = 0; i < histogram->size(); i++)
-        {
-            std::cout << i << ". " << "bin: " << (*histogram)[i].first.first << "-" << (*histogram)[i].first.second << ": " << (*histogram)[i].second << std::endl;
-        }
     }
     else
     {
         histogram = std::make_unique<std::vector<std::pair<std::pair<double,double>,std::uint64_t>>>();
     }
-    //throw std::string("609");
-
+    
     return std::move(histogram);
 }
 
