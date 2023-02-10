@@ -107,11 +107,11 @@ public:
     
     /*|||-----------------------Modularity--------------------------------
      *
-     * Functions to compute the modularity of the graph
+     * Function to compute the modularity of the graph
      *
      * Returns: The Modularity according to paper
      *  "A tutorial in connectome analysis: Topological and spatial features of brain networks"
-     *  by Marcus Kaiser, 2011 in NeuroImage, (892-907)
+     *  by Marcus Kaiser, 2011 in NeuroImage, (892-907), page 898
      * 
      * Parameters 
      * graph:           A DistributedGraph (Function is MPI compliant)
@@ -359,7 +359,7 @@ private:
     {
         std::uint64_t node_in_degree;
         std::uint64_t node_out_degree;
-        std::uint64_t area_global_ID;
-    } nodeModularityInfo;
+        std::uint64_t area_globalID;
+    } NodeModularityInfo;
     
 };

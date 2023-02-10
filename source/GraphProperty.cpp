@@ -531,13 +531,13 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
     std::function<std::unique_ptr<Histogram>(const double,const double)> bin_count_histogram_creator =
     [=](const double min_length, const double max_length)
     {
-        double span_length = (max_length-min_length)*1.01; //achieve small overlap
+        double span_length = max_length-min_length;
         if(span_length<=0)
         {
             throw std::invalid_argument("Span of edge distribution must be larger than zero!");
         }
         double bin_width = span_length/bin_count;
-        double start_length = min_length-0.005*(span_length);
+        double start_length = min_length;
 
         auto histogram = std::make_unique<Histogram>(bin_count);
         for(int i=0;i<bin_count;i++)
@@ -547,6 +547,10 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
             (*histogram)[i].second = 0;
             start_length = start_length+bin_width;
         }
+        //Small overlap to avoid comparison errors
+        histogram->front().first.first = std::nextafter(min_length,min_length-1);
+        histogram->back().first.second = std::nextafter(max_length,max_length+1);
+        
         return std::move(histogram);
     };
     
@@ -604,9 +608,13 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
     std::function<std::unique_ptr<Histogram>(double,double)> bin_count_histogram_creator =
     [=](double min_length, double max_length)
     {
-        double span_length = (max_length-min_length)*1.01; //achieve small overlap
+        double span_length = max_length-min_length;
+        if(span_length<=0)
+        {
+            throw std::invalid_argument("Span of edge distribution must be larger than zero!");
+        }
         double bin_width = span_length/bin_count;
-        double start_length = min_length-0.005*(max_length-min_length);
+        double start_length = min_length;
 
         auto histogram = std::make_unique<Histogram>(bin_count);
         for(int i=0;i<bin_count;i++)
@@ -616,13 +624,10 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm_co
             (*histogram)[i].second = 0;
             start_length = start_length+bin_width;
         }
-        /*
-        // Print out histogram dimensions:
-        std::cout << "number of bins: " << bin_count << std::endl;
-        std::cout << "bin width: " << bin_width << " (span length: " << span_length << ")" << std::endl;
-        std::cout << "min edge length: " << min_length << " (bin start: " << (*histogram)[0].first.first << ")" << std::endl;
-        std::cout << "max edge length: " << max_length << " (bin end: " << (*histogram)[bin_count-1].first.second << ")" << std::endl;
-        */
+        //Small overlap to avoid comparison errors
+        histogram->front().first.first = std::nextafter(min_length,min_length-1);
+        histogram->back().first.second = std::nextafter(max_length,max_length+1);
+        
         return std::move(histogram);
     };
     return std::move(edgeLengthHistogramSingleProc(graph,bin_count_histogram_creator,resultToRank));
@@ -901,11 +906,10 @@ double GraphProperty::computeModularity
     const int number_ranks = MPIWrapper::get_number_ranks();
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
     const std::vector<std::string>& area_names = graph.get_local_area_names();
-    int lookRank=4;
     
 //Gather area names to all ranks
     std::function<std::unique_ptr<std::vector<std::pair<std::string,int>>>(const DistributedGraph&)> 
-        getData = [&](const DistributedGraph& dg)
+        get_Data = [&](const DistributedGraph& dg)
         {
             const std::vector<std::string>& area_names = dg.get_local_area_names();
             auto data = std::make_unique<std::vector<std::pair<std::string,int>>>(area_names.size());
@@ -914,11 +918,10 @@ double GraphProperty::computeModularity
                             {return std::pair<std::string,int>(name,name.size());});            
             return std::move(data);
         };
-        
     std::unique_ptr<std::vector<std::vector<std::string>>> area_names_list_of_ranks = gather_Data_to_all_Ranks<std::string,char>
     (
         graph,
-        getData,
+        get_Data,
         [](std::string area_name){return std::vector<char>(area_name.cbegin(),area_name.cend());},
         [](std::vector<char>area_name_v){return std::string(area_name_v.data(),area_name_v.size());},
         MPI_CHAR
@@ -927,9 +930,9 @@ double GraphProperty::computeModularity
 //Create global area name indices
     std::unordered_map<std::string,std::uint64_t> area_names_map;
     std::vector<std::string> area_names_list;
-    for(std::vector<std::string>& rank_names : *area_names_list_of_ranks)
+    for(const std::vector<std::string>& rank_names : *area_names_list_of_ranks)
     {
-        for(std::string& name : rank_names)
+        for(const std::string& name : rank_names)
         {
             auto status = area_names_map.insert(std::pair<std::string,std::uint64_t>(name,area_names_list.size()));
             if(status.second)
@@ -938,56 +941,48 @@ double GraphProperty::computeModularity
             }
         }
     }
-    std::cout<<"Rank:"<<my_rank<<" got "<<area_names_list.size()<<" areas"<<std::endl;
-
     
-//Create rank local area distance sum
+//Compute adjacency results
     std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>>>
-                 (const DistributedGraph& dg,std::uint64_t node_local_ind)>
-        collect_adjacency_area_info = [&](const DistributedGraph& dg,std::uint64_t node_local_ind)
+                 (const DistributedGraph& dg,std::uint64_t node_localID)>
+        collect_adjacency_area_info = [&](const DistributedGraph& dg,std::uint64_t node_localID)
         {
             const int my_rank = MPIWrapper::get_my_rank();
-            
-            std::uint64_t node_area_localID = dg.get_node_area_localID(my_rank, node_local_ind);
-            auto keyValue = area_names_map.find(area_names[node_area_localID]);
-            assert(keyValue!=area_names_map.end()); 
-            std::uint64_t area_global_ID = keyValue->second;
+            std::uint64_t node_area_localID = dg.get_node_area_localID(my_rank, node_localID);
+            auto key_Value = area_names_map.find(area_names[node_area_localID]);
+            assert(key_Value!=area_names_map.end()); 
+            std::uint64_t area_globalID = key_Value->second;
             
             auto outward_node_area = std::make_unique<std::vector<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>>>();
             
-            const std::vector<OutEdge>& oEdges = dg.get_out_edges(my_rank,node_local_ind);
+            const std::vector<OutEdge>& oEdges = dg.get_out_edges(my_rank,node_localID);
             for(const OutEdge& oEdge : oEdges)
             {
                 std::uint64_t rank = oEdge.target_rank;
                 std::uint64_t id = oEdge.target_id;
                 outward_node_area->push_back(std::tie<std::uint64_t,std::uint64_t,std::uint64_t>
-                                                        (rank,id,area_global_ID));
+                                                        (rank,id,area_globalID));
             }
             return outward_node_area;
         };
-        
-    std::function<std::uint8_t(const DistributedGraph& dg,std::uint64_t node_local_ind,std::uint64_t area_global_ID)> 
+    std::function<std::uint8_t(const DistributedGraph& dg,std::uint64_t node_localID,std::uint64_t area_globalID)> 
         test_for_adjacent_equal_Area = 
-                [&](const DistributedGraph& dg,std::uint64_t node_local_ind,std::uint64_t area_global_ID)
+                [&](const DistributedGraph& dg,std::uint64_t node_localID,std::uint64_t area_globalID)
         {
-            const int my_rank = MPIWrapper::get_my_rank();
-            
-            std::uint64_t node_area_localID = dg.get_node_area_localID(my_rank, node_local_ind);
-            auto keyValue = area_names_map.find(area_names[node_area_localID]);
-            assert(keyValue!=area_names_map.end());
-            
-            if(area_global_ID==keyValue->second)
+            const int my_rank = MPIWrapper::get_my_rank();            
+            std::uint64_t node_area_localID = dg.get_node_area_localID(my_rank, node_localID);
+            auto key_Value = area_names_map.find(area_names[node_area_localID]);
+            assert(key_Value!=area_names_map.end());            
+            if(area_globalID==key_Value->second)
             {
                 return 1;
             }
             return 0;
         };
-        
     std::unique_ptr<NodeToNodeQuestionStructure<std::uint64_t,std::uint8_t>> adjacency_results;
     adjacency_results = node_to_node_question<std::uint64_t,std::uint8_t>
                             (graph,MPI_UINT64_T,collect_adjacency_area_info,
                                    MPI_UINT8_T,test_for_adjacent_equal_Area);
-    
     std::uint64_t local_adjacency_sum = 0;
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
     {
@@ -1001,112 +996,81 @@ double GraphProperty::computeModularity
     }
     std::uint64_t global_adjacency_sum = MPIWrapper::all_reduce<std::uint64_t>(local_adjacency_sum,MPI_UINT64_T,MPI_SUM);
     
-    std::cout<<"Rank:"<<my_rank<<"  local_adjacency_sum:"<<local_adjacency_sum<<std::endl;
-    MPIWrapper::barrier();
-    std::cout<<"Rank:"<<my_rank<<"  global_adjacency_sum:"<<global_adjacency_sum<<std::endl;
-    MPIWrapper::barrier();
-    
-    std::vector<std::vector<nodeModularityInfo>> areaGlobalID_to_node(area_names_list.size());
-    for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
-    {         
-        std::uint64_t node_area_localID = graph.get_node_area_localID(my_rank, node_local_ind);
-        auto keyValue = area_names_map.find(area_names[node_area_localID]);
-        assert(keyValue!=area_names_map.end());
-        std::uint64_t area_global_ID = keyValue->second;
-    
-        const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank,node_local_ind);
-        const std::vector<InEdge>& iEdges = graph.get_in_edges(my_rank,node_local_ind);
-        nodeModularityInfo nodeInfo;
-        nodeInfo.node_in_degree = iEdges.size();
-        nodeInfo.node_out_degree = oEdges.size();
-        nodeInfo.area_global_ID = area_global_ID;
-        
-        areaGlobalID_to_node[area_global_ID].push_back(nodeInfo);
-    }
-    
-    //throw std::string("920");
-    
-    std::vector<std::vector<nodeModularityInfo>> local_areaGlobalID_to_node;
-    for(int area_global_ID=0;area_global_ID<area_names_list.size();area_global_ID++)
-    {
-        int calculationRank = area_global_ID%number_ranks;
-        int area_local_size = areaGlobalID_to_node[area_global_ID].size();
-        
-        std::unique_ptr<std::vector<std::vector<nodeModularityInfo>>> local_areaGlobalID_to_node_ID = gather_Data_to_one_Rank<nodeModularityInfo,nodeModularityInfo>
-        (
-            graph,
-            [&](const DistributedGraph& dg)
-            {
-                auto data = std::make_unique<std::vector<std::pair<nodeModularityInfo,int>>>(area_local_size);
-                std::transform(areaGlobalID_to_node[area_global_ID].cbegin(), areaGlobalID_to_node[area_global_ID].cend(),
-                               data->begin(),[](nodeModularityInfo modulInfo)
-                                    {return std::pair<nodeModularityInfo,int>(modulInfo,1);});            
-                return std::move(data);
-            },
-            [](nodeModularityInfo modulInfo){return std::vector<nodeModularityInfo>({modulInfo});},
-            [](std::vector<nodeModularityInfo> modulInfo_v){return modulInfo_v[0];},
-            MPIWrapper::MPI_nodeModularityInfo,
-            calculationRank
-        );
-        if(my_rank==calculationRank)
-        {
-            local_areaGlobalID_to_node.push_back({});
-            std::for_each(local_areaGlobalID_to_node_ID->begin(),local_areaGlobalID_to_node_ID->end(),
-                       [&](std::vector<nodeModularityInfo> modulInfo_v)
-                       {local_areaGlobalID_to_node.back().insert(local_areaGlobalID_to_node.back().end(),
-                                                                 modulInfo_v.begin(),modulInfo_v.end());});
-        }
-    }
-    std::cout<<"Rank:"<<my_rank<<" got "<<local_areaGlobalID_to_node.size()<<" areas to compute"<<std::endl;
-    std::cout<<"Rank:"<<my_rank<<" got area 0 with "<<local_areaGlobalID_to_node[0].size()<<" nodes to compute"<<std::endl;
-    std::cout<<"Rank:"<<my_rank<<" got area 0 node 0 with "<<local_areaGlobalID_to_node[0][0].node_in_degree<<" and "<<local_areaGlobalID_to_node[0][0].node_out_degree<<" and "<<local_areaGlobalID_to_node[0][0].area_global_ID<<std::endl;
-    
-    MPIWrapper::barrier();
-    std::cout<<"Rank:"<<my_rank<<"  local_areaGlobalID_to_node.size():"<<local_areaGlobalID_to_node.size()<<std::endl;
-    MPIWrapper::barrier();
-    //throw std::string("941");
-    
+//Compute total number of edges
     std::uint64_t local_m = number_local_nodes;
     std::uint64_t global_m = MPIWrapper::all_reduce<std::uint64_t>(local_m,MPI_UINT64_T,MPI_SUM);
-
+    if(global_m==0)
+    {
+        throw std::logic_error("Total number of edges must not be zero");
+    }
+    
+//Compute in-out degree summation    
+    std::vector<std::vector<NodeModularityInfo>> area_globalID_to_node(area_names_list.size());
+    for(std::uint64_t node_localID=0;node_localID<number_local_nodes;node_localID++)
+    {         
+        std::uint64_t node_area_localID = graph.get_node_area_localID(my_rank, node_localID);
+        auto key_value = area_names_map.find(area_names[node_area_localID]);
+        assert(key_value!=area_names_map.end());
+        std::uint64_t area_globalID = key_value->second;
+    
+        const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank,node_localID);
+        const std::vector<InEdge>& iEdges = graph.get_in_edges(my_rank,node_localID);
+        NodeModularityInfo node_info;
+        node_info.node_in_degree = iEdges.size();
+        node_info.node_out_degree = oEdges.size();
+        node_info.area_globalID = area_globalID;
+        
+        area_globalID_to_node[area_globalID].push_back(node_info);
+    }
+    std::vector<std::vector<NodeModularityInfo>> local_area_globalID_to_node;
+    for(int area_globalID=0;area_globalID<area_names_list.size();area_globalID++)
+    {
+        int calculation_rank = area_globalID%number_ranks;
+        int area_local_size = area_globalID_to_node[area_globalID].size();
+        
+        std::function<std::unique_ptr<std::vector<std::pair<NodeModularityInfo,int>>>(const DistributedGraph&)> 
+            get_modularity_data = [&](const DistributedGraph& dg)
+            {
+                auto data = std::make_unique<std::vector<std::pair<NodeModularityInfo,int>>>(area_local_size);
+                std::transform(area_globalID_to_node[area_globalID].cbegin(), area_globalID_to_node[area_globalID].cend(),
+                               data->begin(),[](NodeModularityInfo modulInfo)
+                                    {return std::pair<NodeModularityInfo,int>(modulInfo,1);});            
+                return std::move(data);
+            };
+        
+        std::unique_ptr<std::vector<std::vector<NodeModularityInfo>>> local_area_globalID_to_nodeID = gather_Data_to_one_Rank<NodeModularityInfo,NodeModularityInfo>
+        (
+            graph,
+            get_modularity_data,
+            [](NodeModularityInfo modulInfo){return std::vector<NodeModularityInfo>({modulInfo});},
+            [](std::vector<NodeModularityInfo> node_info_vec){return node_info_vec[0];},
+            MPIWrapper::MPI_nodeModularityInfo,
+            calculation_rank
+        );
+        if(my_rank==calculation_rank)
+        {
+            local_area_globalID_to_node.push_back({});
+            std::for_each(local_area_globalID_to_nodeID->begin(),local_area_globalID_to_nodeID->end(),
+                       [&](std::vector<NodeModularityInfo> modul_info_vec)
+                       {local_area_globalID_to_node.back().insert(local_area_globalID_to_node.back().end(),
+                                                                 modul_info_vec.begin(),modul_info_vec.end());});
+        }
+    }
     double local_in_out_degree_node_sum = 0;
-    std::uint64_t local_in_degree_node_sum = 0;
-    std::uint64_t local_out_degree_node_sum = 0;
-    for(std::vector<nodeModularityInfo>& nodes_of_area : local_areaGlobalID_to_node)
+    for(const std::vector<NodeModularityInfo>& nodes_of_area : local_area_globalID_to_node)
     {
         for(int i=0;i<nodes_of_area.size();i++)
         {
             for(int j=0;j<nodes_of_area.size();j++)
             {
-                assert(nodes_of_area[i].area_global_ID==nodes_of_area[j].area_global_ID);
-                local_in_degree_node_sum += nodes_of_area[i].node_in_degree;
-                local_out_degree_node_sum += nodes_of_area[i].node_out_degree;
-                local_in_out_degree_node_sum+=-1*static_cast<double>((nodes_of_area[i].node_in_degree*nodes_of_area[j].node_out_degree))/global_m;
+                assert(nodes_of_area[i].area_globalID==nodes_of_area[j].area_globalID);
+                local_in_out_degree_node_sum-=static_cast<double>((nodes_of_area[i].node_in_degree*nodes_of_area[j].node_out_degree))/global_m;
             }
         }
     }
-    
-    
-    MPIWrapper::barrier();
-    std::cout<<"Rank:"<<my_rank<<"  local_in_out_degree_node_sum:"<<local_in_out_degree_node_sum<<std::endl;
-    MPIWrapper::barrier();
-    
     double global_in_out_degree_node_sum = MPIWrapper::all_reduce<double>(local_in_out_degree_node_sum,MPI_DOUBLE,MPI_SUM);
-
-    std::cout<<"Rank:"<<my_rank<<"  local_m:"<<local_m<<std::endl;
-    MPIWrapper::barrier();
-    std::cout<<"Rank:"<<my_rank<<"  global_m:"<<global_m<<std::endl;
-    MPIWrapper::barrier();
     
-    MPIWrapper::barrier();
-    if(my_rank==0)
-    {
-        std::cout<<"Rank:"<<my_rank<<"  global_adjacency_sum:"<<global_adjacency_sum<<std::endl;
-        std::cout<<"Rank:"<<my_rank<<"  global_m:"<<global_m<<std::endl;
-        std::cout<<"Rank:"<<my_rank<<"  global_in_out_degree_node_sum:"<<global_in_out_degree_node_sum<<std::endl;
-    }
-    MPIWrapper::barrier();
-    
+//Compute modularity of number of edges, global adjacency and global in and out degree sums
     return (static_cast<double>(global_adjacency_sum) + global_in_out_degree_node_sum)/static_cast<double>(global_m);
 }
 
@@ -1307,6 +1271,7 @@ std::unique_ptr<GraphProperty::Histogram> GraphProperty::edgeLengthHistogramm
 {
 // Test function parameters
     const int my_rank = MPIWrapper::get_my_rank();
+    const int number_of_ranks = MPIWrapper::get_number_ranks();
     if(resultToRank>=number_of_ranks)
     {
         throw std::invalid_argument("Bad parameter - resultToRank:"+resultToRank);
