@@ -114,9 +114,9 @@ class MPIWrapper {
 		);
 		MPI_Type_commit(&MPI_OutEdge);
 		
-		//MPI Type for areaConnectivityInfo
-		MPI_Type_contiguous(5,MPI_INT64_T,&MPI_areaConnectivityInfo);
-		MPI_Type_commit(&MPI_areaConnectivityInfo);
+		//MPI Type for AreaConnectivityInfo
+		MPI_Type_contiguous(5,MPI_INT64_T,&MPI_AreaConnectivityInfo);
+		MPI_Type_commit(&MPI_AreaConnectivityInfo);
 		
 		//MPI Type for threeMotifStructure
 		MPI_Type_contiguous(7,MPI_UINT64_T,&MPI_threeMotifStructure);
@@ -132,7 +132,7 @@ public:
 	inline static MPI_Datatype MPI_InEdge;
 	inline static MPI_Datatype MPI_OutEdge;
 	inline static MPI_Datatype MPI_stdPair_of_AreaLocalID;
-	inline static MPI_Datatype MPI_areaConnectivityInfo;
+	inline static MPI_Datatype MPI_AreaConnectivityInfo;
 	inline static MPI_Datatype MPI_threeMotifStructure;
 	inline static MPI_Datatype MPI_nodeModularityInfo;
 	

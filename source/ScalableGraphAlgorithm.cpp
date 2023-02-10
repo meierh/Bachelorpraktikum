@@ -9,7 +9,7 @@
 #include "EdgeLength.h"
 #include "NodeCounter.h"
 
-#include "GraphProperty.h"
+#include "CommunicationPatterns.h"
 
 #include <CLI/App.hpp>
 #include <CLI/Config.hpp>
@@ -65,6 +65,7 @@ void calculate_metrics(std::filesystem::path input_directory) {
 	}
 }
 
+/*
 void testEdgeGetter(std::filesystem::path input_directory) {
 	const auto my_rank = MPIWrapper::get_my_rank();
 
@@ -405,51 +406,7 @@ void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 		std::cout<<"Err:"<<err<<std::endl;
 	}
 }
-
-void test_GraphPropertyAlgorithmsSingleProc(std::filesystem::path input_directory)
-{
-	const auto my_rank = MPIWrapper::get_my_rank();
-	DistributedGraph dg(input_directory);
-	MPIWrapper::barrier();
-
-	//std::unique_ptr<GraphProperty::AreaConnecMap> areaConnect;
-	std::unique_ptr<GraphProperty::Histogram> histogramCountBins;
-	std::unique_ptr<GraphProperty::Histogram> histogramWidthBins;
-	double modularityPar;
-	double modularitySer;
-	try{
-		/*if(my_rank == 0) std::cout << "areaConnectivityStrengthSingleProc: " << std::endl;
-		auto areaConnect = GraphProperty::areaConnectivityStrengthSingleProc(dg);*/
-		
-		/*
-		if(my_rank == 0) std::cout << "edgeLengthHistogram_constBinCount: " << std::endl;
-		histogramCountBins = GraphProperty::edgeLengthHistogramm_constBinCount(dg,50);
-		MPIWrapper::barrier();
-		if(my_rank == 0) compareEdgeLengthHistogram(*histogramCountBins, *histogramCountBins, 0.5);	//nonsensical test :)
-		MPIWrapper::barrier();
-
-		if(my_rank == 0) std::cout << "edgeLengthHistogram_constBinWidth: " << std::endl;
-		histogramWidthBins = GraphProperty::edgeLengthHistogramm_constBinWidth(dg,2.0);
-		MPIWrapper::barrier();
-		if(my_rank == 0) compareEdgeLengthHistogram(*histogramWidthBins, *histogramWidthBins, 0.5); //nonsensical test :)
-		MPIWrapper::barrier();
-		*/
-
-		if(my_rank == 0) std::cout << "computeModularitySingleProc: " << std::endl;
-		modularitySer =  GraphProperty::computeModularitySingleProc(dg);
-		MPIWrapper::barrier();
-
-		if(my_rank == 0) std::cout << "computeModularity: " << std::endl;
-		modularityPar =  GraphProperty::computeModularity(dg);
-		if(my_rank == 0) std::cout << "Modularity (parallel): " << modularityPar << std::endl;
-		MPIWrapper::barrier();
-	}
-	catch(std::string err)
-	{
-		std::cout<<"Err:"<<err<<std::endl;
-	}
-}
-
+*/
 
 int main(int argument_count, char* arguments[]) {
 	CLI::App app{ "" };
@@ -462,7 +419,7 @@ int main(int argument_count, char* arguments[]) {
 
 	MPIWrapper::init(argument_count, arguments);
 
-	test_modularity(input_directory);
+	//test_modularity(input_directory);
 	//test_GraphPropertyAlgorithmsSingleProc(input_directory);
 
 	MPIWrapper::finalize();
