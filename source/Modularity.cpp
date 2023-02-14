@@ -98,11 +98,13 @@ double Modularity::computeModularity
             local_adjacency_sum += (*this_node_adjacency_results)[i];
         }
     }
-    std::uint64_t global_adjacency_sum = MPIWrapper::all_reduce<std::uint64_t>(local_adjacency_sum,MPI_UINT64_T,MPI_SUM);
+    std::uint64_t global_adjacency_sum=0;
+    MPIWrapper::all_reduce<std::uint64_t>(&local_adjacency_sum,&global_adjacency_sum,1,MPI_UINT64_T,MPI_SUM);
     
 //Compute total number of edges
     std::uint64_t local_m = number_local_nodes;
-    std::uint64_t global_m = MPIWrapper::all_reduce<std::uint64_t>(local_m,MPI_UINT64_T,MPI_SUM);
+    std::uint64_t global_m=0;
+    MPIWrapper::all_reduce<std::uint64_t>(&local_m,&global_m,1,MPI_UINT64_T,MPI_SUM);
     if(global_m==0)
     {
         throw std::logic_error("Total number of edges must not be zero");
@@ -172,7 +174,8 @@ double Modularity::computeModularity
             }
         }
     }
-    double global_in_out_degree_node_sum = MPIWrapper::all_reduce<double>(local_in_out_degree_node_sum,MPI_DOUBLE,MPI_SUM);
+    double global_in_out_degree_node_sum=0;
+    MPIWrapper::all_reduce<double>(&local_in_out_degree_node_sum,&global_in_out_degree_node_sum,1,MPI_DOUBLE,MPI_SUM);
     
 //Compute modularity of number of edges, global adjacency and global in and out degree sums
     return (static_cast<double>(global_adjacency_sum) + global_in_out_degree_node_sum)/static_cast<double>(global_m);
@@ -322,7 +325,8 @@ double Modularity::computeModularitySingleProc
     double result;
 
     std::uint64_t local_m = number_local_nodes;
-    std::uint64_t m = MPIWrapper::all_reduce<std::uint64_t>(local_m, MPI_UINT64_T, MPI_SUM);
+    std::uint64_t m=0;
+    MPIWrapper::all_reduce<std::uint64_t>(&local_m,&m,1, MPI_UINT64_T, MPI_SUM);
     std::cout<<"singleProc global m:"<<m<<std::endl;
 
     // Computation is performed by a single process:

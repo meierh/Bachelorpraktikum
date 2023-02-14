@@ -223,10 +223,13 @@ std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm
     
 // Compute the smallest and largest edge length globally
     const auto [min_length, max_length] = std::minmax_element(edge_lengths.begin(), edge_lengths.end());
-    double global_min_length = *min_length;
-    double global_max_length = *max_length;    
-    global_min_length = MPIWrapper::all_reduce<double>(global_min_length,MPI_DOUBLE,MPI_MIN);
-    global_max_length = MPIWrapper::all_reduce<double>(global_max_length,MPI_DOUBLE,MPI_MAX);
+    double min_len = *min_length;
+    double max_len = *max_length;
+    double global_min_length=0;
+    double global_max_length=0;
+    MPIWrapper::all_reduce<double>(&min_len,&global_min_length,1,MPI_DOUBLE,MPI_MIN);
+    MPIWrapper::all_reduce<double>(&max_len,&global_max_length,1,MPI_DOUBLE,MPI_MAX);    
+
     
 //Create histogram with local edge data
     std::unique_ptr<HistogramData> histogram = histogram_creator(global_min_length,global_max_length);

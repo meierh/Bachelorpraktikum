@@ -1,6 +1,5 @@
 #include "AreaConnectivity.h"
 
-
 std::unique_ptr<AreaConnectivity::AreaConnecMap> AreaConnectivity::compute_area_connectivity_strength
 (
     const DistributedGraph& graph,

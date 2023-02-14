@@ -355,13 +355,11 @@ public:
 	}
 	
 	template<typename T>
-	static T all_reduce(T value,MPI_Datatype datatype,MPI_Op op) {
-		T reduced_global_value(0);
-		if (const auto error_code = MPI_Allreduce(&value,&reduced_global_value,1,datatype,op,MPI_COMM_WORLD); error_code != 0) {
+	static void all_reduce(T* src, T* dest,int count,MPI_Datatype datatype,MPI_Op op) {
+		if (const auto error_code = MPI_Allreduce(src,dest,count,datatype,op,MPI_COMM_WORLD); error_code != 0) {
 			std::cout << "All-reducing all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
-		return reduced_global_value;
 	}
 	
 	template<typename T>

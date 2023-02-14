@@ -192,7 +192,8 @@ void testEdgeGetter(std::filesystem::path input_directory) {
 	}
 }
 
-void compareAreaConnecMap(const GraphProperty::AreaConnecMap& mapPar,const GraphProperty::AreaConnecMap& mapSeq)
+/*
+void compareAreaConnecMap(const AreaConnectivity::AreaConnecMap& mapPar,const AreaConnectivity::AreaConnecMap& mapSeq)
 {
 	for(auto keyValue=mapPar.begin();keyValue!=mapPar.end();keyValue++)
 	{
@@ -232,7 +233,7 @@ void compareAreaConnecMap(const GraphProperty::AreaConnecMap& mapPar,const Graph
 	std::cout<<"mapPar:"<<mapPar.size()<<" || "<<"mapSeq:"<<mapSeq.size()<<std::endl;
 }
 
-bool compareEdgeLengthHistogram(const GraphProperty::Histogram& histogramPar, const GraphProperty::Histogram& histogramSeq, const double epsilon)
+bool compareEdgeLengthHistogram(const Histogram::Histogram& histogramPar, const Histogram::Histogram& histogramSeq, const double epsilon)
 {
 	const auto my_rank = MPIWrapper::get_my_rank();
 	if(my_rank!=0)
@@ -408,7 +409,7 @@ void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 		std::cout<<"Err:"<<err<<std::endl;
 	}
 }
-
+*/
 
 int main(int argument_count, char* arguments[]) {
 	CLI::App app{ "" };

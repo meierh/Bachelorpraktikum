@@ -9,7 +9,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(CLI11)
 
-add_executable(ScalableGraphAlgorithm "ScalableGraphAlgorithm.cpp" "DistributedGraph.cpp" "CommunicationPatterns.cpp" "AreaConnectivity.cpp" "Histogram.cpp" "Modularity.cpp" "NetworkMotifs.cpp")
+add_executable(ScalableGraphAlgorithm "ScalableGraphAlgorithm.cpp" "DistributedGraph.cpp" "CommunicationPatterns.cpp" "AreaConnectivity.cpp" "Histogram.cpp" "Modularity.cpp" "NetworkMotifs.cpp" "Assortativity.cpp")
 
 target_include_directories(ScalableGraphAlgorithm SYSTEM PRIVATE ${CLI11_SOURCE_DIR}/include)
 target_link_libraries(ScalableGraphAlgorithm PRIVATE ${MPI_LIBRARIES})
