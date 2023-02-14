@@ -1,5 +1,6 @@
 #include "AreaConnectivity.h"
 
+
 std::unique_ptr<AreaConnectivity::AreaConnecMap> AreaConnectivity::compute_area_connectivity_strength
 (
     const DistributedGraph& graph,
@@ -38,7 +39,8 @@ std::unique_ptr<AreaConnectivity::AreaConnecMap> AreaConnectivity::compute_area_
             connection.target_area_localID = dg.get_node_area_localID(my_rank,node_local_ind);
             return connection;
         };
-    std::unique_ptr<NodeToNodeQuestionStructure<AreaConnectivityInfo,AreaConnectivityInfo>>area_connections=
+    std::unique_ptr<CommunicationPatterns::NodeToNodeQuestionStructure<AreaConnectivityInfo,AreaConnectivityInfo>>
+    area_connections=
         CommunicationPatterns::node_to_node_question<AreaConnectivityInfo,AreaConnectivityInfo>
                 (graph,MPIWrapper::MPI_AreaConnectivityInfo,transfer_connection_sources,
                  MPIWrapper::MPI_AreaConnectivityInfo,fill_connection_target_areaID);

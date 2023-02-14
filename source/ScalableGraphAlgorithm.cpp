@@ -1,6 +1,7 @@
 ﻿#include "DistributedGraph.h"
 #include "MPIWrapper.h"
 
+
 #include "AllPairsShortestPath.h"
 #include "Centrality.h"
 #include "Clustering.h"
@@ -8,6 +9,7 @@
 #include "EdgeCounter.h"
 #include "EdgeLength.h"
 #include "NodeCounter.h"
+
 
 #include "CommunicationPatterns.h"
 
@@ -65,7 +67,7 @@ void calculate_metrics(std::filesystem::path input_directory) {
 	}
 }
 
-/*
+
 void testEdgeGetter(std::filesystem::path input_directory) {
 	const auto my_rank = MPIWrapper::get_my_rank();
 
@@ -406,7 +408,7 @@ void test_GraphPropertyAlgorithms(std::filesystem::path input_directory)
 		std::cout<<"Err:"<<err<<std::endl;
 	}
 }
-*/
+
 
 int main(int argument_count, char* arguments[]) {
 	CLI::App app{ "" };

@@ -1,5 +1,6 @@
 #include "CommunicationPatterns.h"
 
+/*
 template<typename Q_parameter,typename A_parameter>
 std::unique_ptr<NodeToNodeQuestionStructure<Q_parameter,A_parameter>>
 CommunicationPatterns::node_to_node_question
@@ -230,27 +231,6 @@ std::unique_ptr<std::vector<std::vector<DATA>>> CommunicationPatterns::gather_Da
                     });
     int local_DATA_Elements_size = local_DATA_Elements.size();
     
-    /*
-    MPIWrapper::barrier();
-    std::cout<<"----------------------------------------------------------------------"<<std::endl;
-    MPIWrapper::barrier();
-    
-    if(my_rank==2)
-    {
-        std::cout<<"Rank:"<<my_rank<<"  size:"<<data_inner_size.size()<<std::endl;
-        for(int i=0;i<data_inner_size.size();i++)
-                std::cout<<" "<<data_inner_size[i];
-        std::cout<<"Rank:"<<my_rank<<"  size:"<<local_DATA_Elements.size()<<std::endl;
-        for(int i=0;i<local_DATA_Elements.size();i++)
-                std::cout<<" "<<local_DATA_Elements[i]; 
-        std::cout<<std::endl;    
-        fflush(stdout);
-    }
-    MPIWrapper::barrier();
-    std::cout<<"----------------------------------------------------------------------"<<std::endl;
-    MPIWrapper::barrier();
-    */
-    
     //Gather number of DATA items
     std::vector<int> global_local_number_data(data_target_size);
     std::vector<int> destCountNbr(data_target_size,1);
@@ -302,22 +282,6 @@ std::unique_ptr<std::vector<std::vector<DATA>>> CommunicationPatterns::gather_Da
                      global_DATA_Elements.data(),destCountDATAElements.data(),
                      displsInnerDATAElements.data(),DATA_Element_datatype,root);
 
-    /*
-    MPIWrapper::barrier();
-    if(my_rank==0)
-    {
-        std::cout<<"Rank:"<<my_rank<<"  size:"<<destCountDATAElements[2]<<std::endl;
-        for(int i=displsInnerDATAElements[2];i<displsInnerDATAElements[2]+destCountDATAElements[2];i++)
-                std::cout<<" "<<global_DATA_Elements[i]; 
-        std::cout<<std::endl;    
-        fflush(stdout);
-    }
-    
-    MPIWrapper::barrier();
-    std::cout<<"----------------------------------------------------------------------"<<std::endl;
-    MPIWrapper::barrier();
-    */
-    
     //Reorganize DATA
     auto collectedData = std::make_unique<std::vector<std::vector<DATA>>>();
     if(root==-1 || root==my_rank)
@@ -340,26 +304,11 @@ std::unique_ptr<std::vector<std::vector<DATA>>> CommunicationPatterns::gather_Da
                 displacement+=rank_innerSize[j];
                 (*collectedData)[rank].push_back(transformElementaryToData(dat));
             }
-            
-            /*
-            if(my_rank==0 && rank==2)
-            {
-                std::cout<<"After reorganize"<<std::endl;
-                std::cout<<"Rank:"<<my_rank<<"  size:"<<rank_innerSize.size()<<std::endl;
-                for(int i=0;i<rank_innerSize.size();i++)
-                        std::cout<<" "<<rank_innerSize[i];
-                std::cout<<"Rank:"<<my_rank<<"  size:"<<(*collectedData)[rank].size()<<std::endl;
-                for(int i=0;i<(*collectedData)[rank].size();i++)
-                        std::cout<<" "<<(*collectedData)[rank][i]; 
-                std::cout<<std::endl;    
-                fflush(stdout);
-            }
-            */
         }
     }
-
     return std::move(collectedData);
 };
+
 
 template<typename Q_parameter,typename A_parameter>
 void NodeToNodeQuestionStructure<Q_parameter,A_parameter>::addQuestionsFromOneNodeToSend
@@ -369,15 +318,6 @@ void NodeToNodeQuestionStructure<Q_parameter,A_parameter>::addQuestionsFromOneNo
 )
 {
     assert(structureStatus==Empty || structureStatus==PrepareQuestionsToSend);
-        
-    /*
-    MPIWrapper::barrier();
-    std::cout<<"Line 1203 from process:------------------------------------"<<MPIWrapper::get_my_rank()<<std::endl;
-    fflush(stdout);
-    std::cout<<"list_of_adressees_and_parameter.size():"<<list_of_adressees_and_parameter.size()<<std::endl;
-    std::cout<<"questioner:"<<questioner<<std::endl;
-    MPIWrapper::barrier();
-    */
     
     for(auto [target_rank,target_local_node,Q_parameter_struct] : *list_of_adressees_and_parameter)
     {
@@ -388,10 +328,6 @@ void NodeToNodeQuestionStructure<Q_parameter,A_parameter>::addQuestionsFromOneNo
         // If rank was already encoutered due to other outEdge 
         {
             std::uint64_t outerIndex = rank_to_index->second;
-            /*
-            if(!(outerIndex<nodes_to_ask_question.size() && outerIndex>=0))
-                std::cout<<outerIndex<<"-----------------------------------------------------------"<<nodes_to_ask_question.size()<<std::endl;
-            */
             
             assert(outerIndex>=0);
             assert(outerIndex<nodes_to_ask_question.size());
@@ -449,13 +385,8 @@ void NodeToNodeQuestionStructure<Q_parameter,A_parameter>::addQuestionsFromOneNo
     }
     
     structureStatus = PrepareQuestionsToSend;
-    /*
-    MPIWrapper::barrier();
-    std::cout<<"Line 1245 from process:------------------------------------"<<MPIWrapper::get_my_rank()<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();
-    */
 }
+
 
 template<typename Q_parameter,typename A_parameter>
 void NodeToNodeQuestionStructure<Q_parameter,A_parameter>::setQuestionsReceived
@@ -498,6 +429,7 @@ void NodeToNodeQuestionStructure<Q_parameter,A_parameter>::setQuestionsReceived
     //throw std::string("1544");
 }
 
+
 template<typename Q_parameter,typename A_parameter>
 void NodeToNodeQuestionStructure<Q_parameter,A_parameter>::setAnswers
 (
@@ -534,12 +466,6 @@ void NodeToNodeQuestionStructure<Q_parameter,A_parameter>::setAnswers
             assert(nbr_of_answers==nodes_that_ask_the_question[outerIndex].size());
             assert(nbr_of_answers==question_parameters[outerIndex].size());            answers_to_questions[outerIndex].resize(nbr_of_answers);
             
-            /*
-            for(int i=0;i<nbr_of_answers;i++)
-            {
-                answers_to_questions[outerIndex][i] = total_answers[rank_displ[rank]+i];
-            }
-            */
             std::memcpy(answers_to_questions[outerIndex].data(),&total_answers[rank_displ[rank]],nbr_of_answers*sizeof(A_parameter));
         }
     }
@@ -607,6 +533,7 @@ std::vector<Q_parameter>& NodeToNodeQuestionStructure<Q_parameter,A_parameter>::
     return dummy_question_parameters;
 }
 
+
 template<typename Q_parameter,typename A_parameter>
 std::vector<A_parameter>& NodeToNodeQuestionStructure<Q_parameter,A_parameter>::get_answers_for_rank
 (
@@ -625,6 +552,7 @@ std::vector<A_parameter>& NodeToNodeQuestionStructure<Q_parameter,A_parameter>::
         return dummy_answers_to_questions;
     }
 }
+
 
 template<typename Q_parameter,typename A_parameter>
 std::unique_ptr<std::vector<A_parameter>> NodeToNodeQuestionStructure<Q_parameter,A_parameter>::getAnswersOfQuestionerNode
@@ -666,18 +594,6 @@ void NodeToNodeQuestionStructure<Q_parameter,A_parameter>::finalizeAddingQuestio
         list_index_to_adressee_rank[iter->second] = iter->first;
     }
 
-    /*
-    for(std::vector<std::uint64_t>& list_nbrToRank: nodes_to_ask_question)
-    {
-        std::cout<<"nodes_to_ask_question: "<<list_nbrToRank.size();
-        std::cout<<std::endl;
-    }
-    for(std::uint64_t list_nbrToRank: list_index_to_adressee_rank)
-    {
-        std::cout<<"list_index_to_adressee_rank: "<<list_nbrToRank;
-        std::cout<<std::endl;
-    }
-    */
     
     addressee_ranks_to_nbrOfQuestions.resize(number_ranks,0);
     for(int index=0;index<list_index_to_adressee_rank.size();index++)
@@ -687,12 +603,6 @@ void NodeToNodeQuestionStructure<Q_parameter,A_parameter>::finalizeAddingQuestio
         addressee_ranks_to_nbrOfQuestions[rank] = nodes_to_ask_question[index].size();
     }
 
-    /*
-    for(std::uint64_t list_nbrToRank: addressee_ranks_to_nbrOfQuestions)
-    {
-        std::cout<<"addressee_ranks_to_nbrOfQuestions: "<<list_nbrToRank<<std::endl;
-    }
-    */
     
     structureStatus = ClosedQuestionsPreparation;
     
@@ -714,27 +624,5 @@ void NodeToNodeQuestionStructure<Q_parameter,A_parameter>::finalizeAddingQuestio
         assert(questioner==nodes_that_ask_the_question[outerIndex][innerIndex]);
         assert(innerIndex<question_parameters[outerIndex].size());
     }
-    
-    
-    // Testing
-    /*
-    for(int index=0; index<list_index_to_adressee_rank.size(); index++)
-    {
-        int targetRank = list_index_to_adressee_rank[index];
-        for(int j=0;j<nodes_to_ask_question[index].size();j++)
-        {
-            int targetNode = nodes_to_ask_question[index][j];
-            int sourceNode = nodes_that_ask_the_question[index][j];
-            threeMotifStructure struc = question_parameters[index][j];
-            assert(struc.node_1_rank==MPIWrapper::get_my_rank());
-            assert(struc.node_1_local==sourceNode);
-            assert(struc.node_2_rank==targetRank);
-            assert(struc.node_2_local==targetNode);
-        }
-        auto keyValue = rank_to_outerIndex.find(targetRank);
-        assert(keyValue!=rank_to_outerIndex.end());
-        std::uint64_t outerIndex = keyValue->second;
-        assert(outerIndex==index);
-    }
-    */
 }
+*/

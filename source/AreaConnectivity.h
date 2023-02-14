@@ -10,7 +10,6 @@
 
 class AreaConnectivity {
 public:
-
     /*|||------------------areaConnectivityStrength--------------------------
      *
      * Foreach combination of areas A and B, the function sums the weight
