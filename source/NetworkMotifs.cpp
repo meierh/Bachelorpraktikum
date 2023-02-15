@@ -1,6 +1,6 @@
 #include "NetworkMotifs.h"
 
-std::vector<long double> NetworkMotifs::networkTripleMotifs
+std::vector<long double> NetworkMotifs::compute_network_TripleMotifs
 (
     const DistributedGraph& graph,
     unsigned int resultToRank
