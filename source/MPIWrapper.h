@@ -402,23 +402,36 @@ public:
 		}
 	}
 	
+	/* Access method for arbitrary rma window
+	 * 
+	 * Parameters: 
+	 * 	dest_addr: Pointer to destination memory
+	 * 	count: Number of transfered elements of type T/datatype
+	 * 	src_disp: Displacement of initial transfer value
+	 * 	src_rank: Rank of data to get
+	 * 	datatype: MPI_Type corresponding to T
+	 * 
+	 * 	Requirements:
+	 * 		[dest_addr,dest_addr+count*sizeof(T)) must be a valid memory range to write to
+	 * 		[rma_window.my_base_pointer+src_disp*sizeof(T),rma_window.my_base_pointer+src_disp*sizeof(T)+count*sizeof(T)) 
+	 * 			must be a valid memory range to read from to
+	 * 		count >= 0
+	 * 		src_disp >= 0
+	 * 		src_rank in [0,number_of_ranks)
+	 */
 	template<typename T>
-	static void passive_sync_RMA_get(void *dest_addr, int count, int src_disp, int src_rank, MPI_Datatype datatype, const RMAWindow<T>& rma_window)
-	{
+	static void passive_sync_rma_get(T *dest_addr, int count, int src_disp, int src_rank, MPI_Datatype datatype, const RMAWindow<T>& rma_window) {
 		lock_window_shared(src_rank,rma_window.window);
-		if(src_rank == my_rank)
-		{	
-			//std::cout<<"In:"<<my_rank<<std::endl;
+		if(src_rank == my_rank) {	
 			const T* const src_base_ptr = rma_window.my_base_pointer;
 			const T* src_ptr = src_base_ptr+src_disp;
 			std::memcpy(dest_addr,src_ptr,count*sizeof(T));
 		}
-		else
-		{
+		else {
 			MPI_Request request_item;
-			if(const auto error_code = MPI_Rget(dest_addr,count,datatype,src_rank,src_disp*sizeof(T),
-												count,datatype, rma_window.window, &request_item);
-				error_code!=MPI_SUCCESS){
+			const int error_code = MPI_Rget(dest_addr, count, datatype, src_rank, src_disp*sizeof(T),
+											count, datatype, rma_window.window, &request_item);
+			if(error_code!=MPI_SUCCESS) {
 					std::cout << "Fetching a remote value returned the error code: " << error_code << std::endl;
 					throw error_code;
 			}
