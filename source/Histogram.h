@@ -28,7 +28,7 @@ public:
      * bin_width:       Width of the bin in the resulting histogram
      * resultToRank:    MPI Rank to receive the results
      */
-    static std::unique_ptr<HistogramData> edgeLengthHistogramm_constBinWidth
+    static std::unique_ptr<HistogramData> compute_edgeLength_Histogramm_constBinWidth
     (
         const DistributedGraph& graph,
         const double bin_width,
@@ -43,7 +43,7 @@ public:
      * bin_count:       Number of bins in the resulting histogram
      * resultToRank:    MPI Rank to receive the results
      */
-    static std::unique_ptr<HistogramData> edgeLengthHistogramm_constBinCount
+    static std::unique_ptr<HistogramData> compute_edgeLength_Histogramm_constBinCount
     (
         const DistributedGraph& graph,
         const std::uint64_t bin_count,
@@ -64,7 +64,7 @@ public:
     /*-------------------------Histogram----------------------------------|||*/
 
 private:
-    static std::unique_ptr<HistogramData> edgeLengthHistogramm
+    static std::unique_ptr<HistogramData> compute_edgeLength_Histogramm
     (
         const DistributedGraph& graph,
         const std::function<std::unique_ptr<HistogramData>(const double,const double)> histogram_creator,

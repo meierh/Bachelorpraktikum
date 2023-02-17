@@ -1,6 +1,6 @@
 #include "Histogram.h"
 
-std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm_constBinWidth
+std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogramm_constBinWidth
 (
     const DistributedGraph& graph,
     const double bin_width,
@@ -45,10 +45,10 @@ std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm_constB
         return std::move(histogram);
     };
     
-    return std::move(edgeLengthHistogramm(graph,bin_width_histogram_creator,resultToRank));
+    return std::move(compute_edgeLength_Histogramm(graph,bin_width_histogram_creator,resultToRank));
 }
 
-std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm_constBinCount
+std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogramm_constBinCount
 (
     const DistributedGraph& graph,
     const std::uint64_t bin_count,
@@ -91,7 +91,7 @@ std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm_constB
         return std::move(histogram);
     };
     
-    return std::move(edgeLengthHistogramm(graph,bin_count_histogram_creator,resultToRank));
+    return std::move(compute_edgeLength_Histogramm(graph,bin_count_histogram_creator,resultToRank));
 }
 
 std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm_constBinWidthSingleProc
@@ -171,7 +171,7 @@ std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm_constB
 }
 
 
-std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm
+std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogramm
 (
     const DistributedGraph& graph,
     const std::function<std::unique_ptr<HistogramData>(const double, const double)> histogram_creator,

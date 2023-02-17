@@ -4,6 +4,7 @@
 
 #include "AllPairsShortestPath.h"
 #include "Centrality.h"
+#include "CentralityApprox.h"
 #include "Clustering.h"
 #include "DegreeCounter.h"
 #include "EdgeCounter.h"
@@ -378,6 +379,26 @@ void test_modularity(std::filesystem::path input_directory)
 	catch(std::string err)
 	{
 		std::cout<<"Err:"<<err<<std::endl;
+	}
+}
+
+void test_bc(std::filesystem::path input_directory){
+	const auto my_rank = MPIWrapper::get_my_rank();
+	DistributedGraph dg(input_directory);
+	MPIWrapper::barrier();
+
+	std::unique_ptr<BetweennessCentralityApproximation::BC_e> bc;
+	int m = 1000;
+	double d = 0.25;
+	int k = 200;
+	try{
+		if(my_rank == 0) std::cout << "compute_betweenness_centrality_approx: " << std::endl;
+		bc =  BetweennessCentralityApproximation::compute_betweenness_centrality_approx(dg, m, d, k);
+		MPIWrapper::barrier();
+	}
+	catch(std::string err)
+	{
+		std::cout << "Err:" << err << std::endl;
 	}
 }
 

@@ -18,7 +18,7 @@ public:
      * graph:           A DistributedGraph (Function is MPI compliant)
      * 
      */
-    static std::vector<long double> networkTripleMotifs
+    static std::vector<long double> compute_network_TripleMotifs
     (
         const DistributedGraph& graph,
         unsigned int resultToRank = 0

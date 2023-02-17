@@ -1,6 +1,6 @@
 #include "Modularity.h"
 
-double Modularity::computeModularity
+double Modularity::compute_modularity
 (
     const DistributedGraph& graph
 )
