@@ -125,6 +125,10 @@ class MPIWrapper {
 		//MPI Type for nodeModularityInfo 
 		MPI_Type_contiguous(3,MPI_UINT64_T,&MPI_nodeModularityInfo);
 		MPI_Type_commit(&MPI_nodeModularityInfo);
+		
+		//MPI Type for EdgeDegrees 
+		MPI_Type_contiguous(4,MPI_UINT64_T,&MPI_EdgeDegrees);
+		MPI_Type_commit(&MPI_EdgeDegrees);
 	}
 
 public:
@@ -135,6 +139,7 @@ public:
 	inline static MPI_Datatype MPI_AreaConnectivityInfo;
 	inline static MPI_Datatype MPI_threeMotifStructure;
 	inline static MPI_Datatype MPI_nodeModularityInfo;
+	inline static MPI_Datatype MPI_EdgeDegrees;
 	
 	static void init(int argument_count, char* arguments[]) {
 		if (const auto error_code = MPI_Init(&argument_count, &arguments); error_code != 0) {
