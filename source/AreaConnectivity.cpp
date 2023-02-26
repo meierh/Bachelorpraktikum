@@ -155,12 +155,7 @@ std::unique_ptr<AreaConnectivity::AreaConnecMap> AreaConnectivity::areaConnectiv
         MPI_UINT64_T,
         resultToRank    
     );
-    
-    MPIWrapper::barrier();
-    std::cout<<"Hello from 174 "<<my_rank<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();  
-    
+        
     std::function<std::unique_ptr<std::vector<std::pair<std::string,int>>>(const DistributedGraph&)> 
         getNames = [](const DistributedGraph& dg)
         {
@@ -181,11 +176,6 @@ std::unique_ptr<AreaConnectivity::AreaConnecMap> AreaConnectivity::areaConnectiv
         resultToRank
     );
     
-    MPIWrapper::barrier();
-    std::cout<<"Hello from 199 "<<my_rank<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();  
-    
     auto global_connecName_map = std::make_unique<AreaConnecMap>();
     if(my_rank==resultToRank)
     {
@@ -205,10 +195,7 @@ std::unique_ptr<AreaConnectivity::AreaConnecMap> AreaConnectivity::areaConnectiv
             }
         }
     }
-    MPIWrapper::barrier();
-    std::cout<<"Hello from 223 "<<my_rank<<std::endl;
-    fflush(stdout);
-    MPIWrapper::barrier();  
+
     return std::move(global_connecName_map);
 }
 
@@ -349,18 +336,6 @@ std::unique_ptr<AreaConnectivity::AreaConnecMap> AreaConnectivity::areaConnectiv
                 displacement += rank_to_area_names_char_len[r][l];
             }
         }
-        
-        // Print out rank_to_area_names
-        for(int i = 0; i < rank_to_area_names.size(); i++)
-        {
-            std::cout<<"From Rank: "<<i<<" [";
-            for(int j=0;j<rank_to_area_names[i].size();j++)
-            {
-                std::cout<<" "<<rank_to_area_names[i][j];
-            }
-            std::cout<<"] "<<rank_to_area_names[i].size()<<std::endl;
-        }
-        std::cout << "" << std::endl;
     }
     MPIWrapper::barrier();
     
@@ -392,16 +367,6 @@ std::unique_ptr<AreaConnectivity::AreaConnecMap> AreaConnectivity::areaConnectiv
                 }
             }
         }
-        // Print out AreaConnecMap:
-        int nr = 0;
-        for (auto& [key, value]: (*result)) 
-        {
-            std::cout << "connection " << nr << 
-                ": weight = " << value << " (" << key.first << " --> " << key.second << ")" << std::endl;
-            nr++;
-        }
-        std::cout << "Elements in areaConnecMap (single proc): " << nr << std::endl;
-        std::cout << "Size of areaConnecMap (single proc): " << result->size() << std::endl;
     }
     return std::move(result);
 }

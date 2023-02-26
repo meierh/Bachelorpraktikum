@@ -176,7 +176,7 @@ double Modularity::compute_modularity
     }
     double global_in_out_degree_node_sum=0;
     MPIWrapper::all_reduce<double>(&local_in_out_degree_node_sum,&global_in_out_degree_node_sum,1,MPI_DOUBLE,MPI_SUM);
-    
+
 //Compute modularity of number of edges, global adjacency and global in and out degree sums
     return (static_cast<double>(global_adjacency_sum) + global_in_out_degree_node_sum)/static_cast<double>(global_m);
 }
@@ -327,49 +327,65 @@ double Modularity::computeModularitySingleProc
     std::uint64_t local_m = number_local_nodes;
     std::uint64_t m=0;
     MPIWrapper::all_reduce<std::uint64_t>(&local_m,&m,1, MPI_UINT64_T, MPI_SUM);
-    std::cout<<"singleProc global m:"<<m<<std::endl;
 
     // Computation is performed by a single process:
     if(my_rank == resultToRank)
     {
-        double sum = 0.0;
-        
+        struct StdPair_hash
+        {
+            std::size_t operator () (const std::pair<std::uint64_t,std::uint64_t> &p) const 
+            {
+                return std::hash<std::uint64_t>{}(p.first) ^  std::hash<std::uint64_t>{}(p.second);
+            }
+        };
+        double sum=0;
+        double sum_a = 0.0;
+        double sum_k_k = 0.0;
+        std::unordered_map<std::string,std::unordered_set<std::pair<std::uint64_t,std::uint64_t>,StdPair_hash>> area_to_nodes;
         for(int ir = 0; ir < number_ranks; ir++)
         {
             for(int i = 0; i < node_numbers[ir]; i++)
             {
                 std::uint64_t i_area_localID = graph.get_node_area_localID(ir, i);
                 std::string i_area_str = rank_to_area_names[ir][i_area_localID];
-                int ki_in = graph.get_in_edges(ir, i).size();
-                const std::vector<OutEdge>& i_out_edges = graph.get_out_edges(ir, i);
-                for(int jr = 0; jr < number_ranks; jr++)
+                
+                area_to_nodes[i_area_str].insert({ir,i});
+            }
+        }
+        for(auto iter_map=area_to_nodes.cbegin(); iter_map!=area_to_nodes.cend(); iter_map++)
+        {
+            std::string area_name = iter_map->first;
+            auto& this_area_node_map = iter_map->second;
+            
+            std::int64_t a_ij = 0;
+            for(auto iter_set=this_area_node_map.cbegin(); iter_set!=this_area_node_map.cend(); iter_set++)
+            {
+                std::pair<std::uint64_t,std::uint64_t> node = *iter_set;
+                const std::vector<OutEdge>& node_out_edges = graph.get_out_edges(node.first,node.second);
+                for(const OutEdge& node_out_edge : node_out_edges)
                 {
-                    for(int j = 0; j < node_numbers[jr]; j++)
-                    {
-                        
-                        std::uint64_t j_area_localID = graph.get_node_area_localID(jr, j);
-                        std::string j_area_str = rank_to_area_names[jr][j_area_localID];
-                        if(i_area_str == j_area_str)
-                        {
-                            int kj_out = graph.get_out_edges(jr, j).size();
-                            int a_ij = 0; 
-                            for(const OutEdge& i_out_edge : i_out_edges)
-                            { 
-                                if(i_out_edge.target_rank == jr && i_out_edge.target_id == j){
-                                    a_ij = 1;
-                                }
-                            }
-                            sum += a_ij - static_cast<double>((ki_in * kj_out))/m;
-                        }
-                    }
+                    if(this_area_node_map.find({node_out_edge.target_rank,node_out_edge.target_id})!=this_area_node_map.end())
+                        a_ij++;
                 }
             }
-            std::cout << "i_rank(" << ir << "/" << number_ranks << ") with " << node_numbers[ir] << " nodes" << std::endl; 
+            double k_k = 0;
+            for(auto iter_set=this_area_node_map.cbegin(); iter_set!=this_area_node_map.cend(); iter_set++)
+            {
+                std::pair<std::uint64_t,std::uint64_t> node = *iter_set;
+                std::int64_t ki_in = graph.get_in_edges(node.first,node.second).size();
+                for(auto iter_set2=this_area_node_map.cbegin(); iter_set2!=this_area_node_map.cend(); iter_set2++)
+                {
+                    std::pair<std::uint64_t,std::uint64_t> node2 = *iter_set2;
+                    std::int64_t kj_out = graph.get_out_edges(node2.first,node2.second).size();
+                    k_k -= static_cast<double>((ki_in * kj_out))/m;
+                }
+            }
+            sum_a += a_ij;
+            sum_k_k += k_k;
         }
+        sum = sum_a + sum_k_k;
+        
         result = sum/m;
-
-        // Print out AreaConnecMap:
-        std::cout << "Modularity (serial): " << result << std::endl;
     }
     return result;
 }

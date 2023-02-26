@@ -34,14 +34,22 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogra
         double one_side_overlap = (two_side_overlap_mult/2)*bin_width;
         double start_length = min_length-one_side_overlap;
 
+        //Small decrement to avoid comparison errors
+        start_length = std::nextafter(start_length,start_length-1);
+        //Small increment to avoid comparison errors
+        double bin_width_ext = std::nextafter(bin_width,bin_width+1);
+        
         auto histogram = std::make_unique<HistogramData>(number_bins);
         for(int i=0;i<number_bins;i++)
         {
             (*histogram)[i].first.first = start_length;
-            (*histogram)[i].first.second = start_length+bin_width;
+            (*histogram)[i].first.second = start_length+bin_width_ext;
             (*histogram)[i].second = 0;
-            start_length = start_length+bin_width;
+            start_length = start_length+bin_width_ext;
         }
+        
+        assert(histogram->front().first.first<min_length);
+        assert(histogram->back().first.second>max_length);
         return std::move(histogram);
     };
     
@@ -74,7 +82,11 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogra
             throw std::invalid_argument("Span of edge distribution must be larger than zero!");
         }
         double bin_width = span_length/bin_count;
-        double start_length = min_length;
+        
+        //Small increment to avoid comparison errors
+        bin_width = std::nextafter(bin_width,bin_width+1);
+        //Small decrement to avoid comparison errors
+        double start_length = std::nextafter(min_length,min_length-1);
 
         auto histogram = std::make_unique<HistogramData>(bin_count);
         for(int i=0;i<bin_count;i++)
@@ -84,10 +96,9 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogra
             (*histogram)[i].second = 0;
             start_length = start_length+bin_width;
         }
-        //Small overlap to avoid comparison errors
-        histogram->front().first.first = std::nextafter(min_length,min_length-1);
-        histogram->back().first.second = std::nextafter(max_length,max_length+1);
-        
+    
+        assert(histogram->front().first.first<min_length);
+        assert(histogram->back().first.second>max_length);
         return std::move(histogram);
     };
     
@@ -120,13 +131,9 @@ std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm_constB
             (*histogram)[i].second = 0;
             start_length = start_length+bin_width;
         }
-        /*
-        // Print out histogram dimensions:
-        std::cout << "number of bins: " << number_bins << std::endl;
-        std::cout << "bin width: " << bin_width << " (span length: " << span_length << ")" << std::endl;
-        std::cout << "min edge length: " << min_length << " (bin start: " << (*histogram)[0].first.first << ")" << std::endl;
-        std::cout << "max edge length: " << max_length << " (bin end: " << (*histogram)[number_bins-1].first.second << ")" << std::endl;
-        */
+        
+        assert(histogram->front().first.first<min_length);
+        assert(histogram->back().first.second>max_length);
         return std::move(histogram);
     };
     return std::move(edgeLengthHistogramSingleProc(graph,bin_width_histogram_creator,resultToRank));
@@ -165,6 +172,8 @@ std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm_constB
         histogram->front().first.first = std::nextafter(min_length,min_length-1);
         histogram->back().first.second = std::nextafter(max_length,max_length+1);
         
+        assert(histogram->front().first.first<min_length);
+        assert(histogram->back().first.second>max_length);
         return std::move(histogram);
     };
     return std::move(edgeLengthHistogramSingleProc(graph,bin_count_histogram_creator,resultToRank));
@@ -327,7 +336,6 @@ std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramSinglePr
                 }
             }
         }
-        std::cout << "total edge count: " << edge_lengths.size() << std::endl;
         histogram = histogram_creator(min_length, max_length);
         
         // For each bucket iterate through the edge lengths vector and increase bucket counter if corresponding edge length is found
@@ -342,11 +350,6 @@ std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramSinglePr
                     (*histogram)[i].second++;
                 }
             }  
-        }
-        // Print out histogram
-        for (int i = 0; i < histogram->size(); i++)
-        {
-            std::cout << i << ". " << "bin: " << (*histogram)[i].first.first << "-" << (*histogram)[i].first.second << ": " << (*histogram)[i].second << std::endl;
         }
     }
     return std::move(histogram);

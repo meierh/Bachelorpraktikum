@@ -157,12 +157,14 @@ public:
         times.push_back(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count());
         start = std::chrono::steady_clock::now(); 
         
+        /*
         std::cout<<"Rank:"<<my_rank<<"[ ";
         for(int i=0;i<times.size();i++)
         {
             std::cout<<" "<<code_names[i]<<":"<<times[i]<<" ";
         }
         std::cout<<"]"<<std::endl;
+        */
         
         return std::move(questioner_structure);
     };
