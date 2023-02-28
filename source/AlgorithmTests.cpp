@@ -1,4 +1,5 @@
 #include "AlgorithmTests.h"
+#include "CentralityApprox.cpp" // solved linking problem (maybe needed because file name != class name (?))
 
 void test_algorithm_parallelization
 (
@@ -83,6 +84,35 @@ void test_algorithm_parallelization
 	catch(std::string error_code)
 	{
 		test_result = "Modularity Error :"+error_code;
+	}
+	if(my_rank==0)
+		std::cout<<test_result<<std::endl;
+}
+
+void test_centrality_approx(std::filesystem::path input_directory)
+{
+	const int my_rank = MPIWrapper::get_my_rank();
+	DistributedGraph dg(input_directory);
+	MPIWrapper::barrier();
+	std::string test_result;
+	
+	
+// Test BetweennessCentrality Approximation
+	std::unique_ptr<BetweennessCentralityApproximation::BC_e> betweenness_centrality;
+	int m = 20;
+	double d = 0.25;
+	int k = 10;
+
+	std::cout<<"Start betweennessCentralityApprox..."<<std::endl;
+	try{
+		betweenness_centrality = BetweennessCentralityApproximation::compute_betweenness_centrality_approx(dg, m, d, k);
+		MPIWrapper::barrier();
+		/*...*/
+		test_result = "BetweennessCentralityApprox test completed";
+	}
+	catch(std::string error_code)
+	{
+		test_result = "BetweennessCentralityApprox Error :"+error_code;
 	}
 	if(my_rank==0)
 		std::cout<<test_result<<std::endl;

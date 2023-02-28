@@ -17,6 +17,8 @@ std::unique_ptr<BetweennessCentralityApproximation::BC_e> BetweennessCentralityA
 	const auto prefix_distribution = calculate_prefix_sum(node_distribution);
     std::vector<uint64_t> node_numbers = MPIWrapper::all_gather(graph.get_number_local_nodes());
     
+    if(my_rank == result_rank) std::cout << "debug 1" << std::endl;
+
     if(m <= 0){
         std::cout << "Error: m must be greater than 0" << std::endl;
     }
@@ -41,11 +43,16 @@ std::unique_ptr<BetweennessCentralityApproximation::BC_e> BetweennessCentralityA
         iterations++;
     }
     
+    if(my_rank == result_rank) std::cout << "debug 2" << std::endl;
+
     // main loop
     for (int i = 0; i < iterations; i++) {
         std::pair<int, int> sample = drawSample(graph, number_ranks, number_local_nodes, prefix_distribution);
+        if(my_rank == result_rank) std::cout << "debug 3" << std::endl;
         std::unordered_map<int, double> Z = getFunctionValues(graph, sample, prefix_distribution);
+        if(my_rank == result_rank) std::cout << "debug 4" << std::endl;
         std::vector<double> lambda = drawRademacher(k);
+        if(my_rank == result_rank) std::cout << "debug 5" << std::endl;
 
         for (std::pair<int, double> z : Z) {
             int node_id = z.first;
@@ -63,16 +70,16 @@ std::unique_ptr<BetweennessCentralityApproximation::BC_e> BetweennessCentralityA
             //sums.emplace(node_id, lambda_modified);
         }
     }
-    
+    if(my_rank == result_rank) std::cout << "debug 6" << std::endl;
     // Gather sums vectors from all ranks to result rank
-    std::function<std::unique_ptr<std::vector<std::pair<std::vector<double>, int>>>()> 
-        get_names = [&]() {
+    std::function<std::unique_ptr<std::vector<std::pair<std::vector<double>, int>>>(const DistributedGraph&)> 
+        get_vectors = [&](const DistributedGraph& dg) {
             auto data = std::make_unique<std::vector<std::pair<std::vector<double>, int>>>(sums.size());
             std::transform(sums.cbegin(), sums.cend(), data->begin(), [] (std::vector<double> vec) {return std::pair<std::vector<double>, int>(vec, vec.size());});            
             return std::move(data);
         };
-
-    std::unique_ptr<std::vector<std::vector<std::vector<double>>>> sums_of_ranks = gather_Data_to_one_Rank<std::vector<double>, double>
+    if(my_rank == result_rank) std::cout << "debug 7" << std::endl;
+    std::unique_ptr<std::vector<std::vector<std::vector<double>>>> sums_of_ranks = CommunicationPatterns::gather_Data_to_one_Rank<std::vector<double>, double>
     (
     	graph,
     	get_vectors,
@@ -81,7 +88,9 @@ std::unique_ptr<BetweennessCentralityApproximation::BC_e> BetweennessCentralityA
     	MPI_DOUBLE,
     	result_rank
     );
-    
+
+    if(my_rank == result_rank) std::cout << "debug 8" << std::endl;
+
     // Result rank adds sums vectors of the other ranks to his sums vector
     if(my_rank == result_rank) {
         
@@ -96,7 +105,7 @@ std::unique_ptr<BetweennessCentralityApproximation::BC_e> BetweennessCentralityA
             }
         }
     }
-    
+    if(my_rank == result_rank) std::cout << "debug 9" << std::endl;
     // Result vector computes B
     std::unordered_map<std::pair<int, int>, double, BC_hash> bc;
     
@@ -123,77 +132,8 @@ std::unique_ptr<BetweennessCentralityApproximation::BC_e> BetweennessCentralityA
         node n = {my_rank, node_id_rank};
         B.insert({n, bc_pair.second[k+1]/m});
     }*/
-
-    ///////////////////// Start: Merge sums to one rank: /////////////////////
     
-    /* Getherv Implementation aus MPIWrapper im feature_networkMotifs branch verwendet:
-    template<typename T>
-	static void gatherv(T* src, int count, T* dest, int* destCounts, int* displs, MPI_Datatype datatype,int root){
-		if (const auto error_code= MPI_Gatherv(src,count,datatype,dest,destCounts,displs,datatype,root,MPI_COMM_WORLD);	error_code != 0) {
-			std::cout << "Gatherving all values returned the error: " << error_code << std::endl;
-			throw error_code;
-		}
-	}
-    */
-    /*
-    // Init variables for gatherv:
-    std::vector<int> sums_values;               // send buffer
-    int number_sums_values;                     // send buffer size
-    std::vector<int> all_sums_values;           // receive buffer
-    std::vector<int> rank_to_number_sums_values;// receive counts
-    std::vector<int> sums_values_displ;         // displacement
-
-    // Following prepare variables for gatherv:
-    
-    // Flatten all value vectors in the map to one-dimensional sums_values vector
-    for (auto const& pair : sums){
-        for(auto const& elem : pair.second){
-            sums_values.push_back(elem);
-            number_sums_values++;
-        }
-    }
-    assert(number_sums_values == (number_local_nodes * (k+2)));   //debug
-    
-    // Gather from each rank number_sums_values for the gatherv receive counts
-    if(my_rank == result_rank){
-        rank_to_number_sums_values.resize(number_ranks);
-    }
-    MPIWrapper::gather<int>(&number_sums_values, rank_to_number_sums_values.data(), 1, MPI_INT, result_rank);
-    MPIWrapper::barrier();
-
-    // Displacement contains the offset indexes for each rank so that gatherv knows where the insertion of local buffer elements start in the receive buffer
-    if(my_rank == result_rank){
-        sums_values_displ.resize(number_ranks);
-        int displacement = 0;
-        
-        for(size_t r = 0; r < number_ranks; r++){
-            sums_values_displ[r] = displacement;
-            displacement += rank_to_number_sums_values[r];
-        }
-        all_sums_values.resize(displacement);
-    }
-
-    // Wrapper::gatherv(send_buffer, send_buffer_size, receive_buffer, receive_counts, displacement, mpi_data_type, result_rank)
-    MPIWrapper::gatherv<int>(sums_values.data(), number_sums_values,
-                            all_sums_values.data(), rank_to_number_sums_values.data(), 
-                            sums_values_displ.data(), MPI_INT, result_rank);
-    MPIWrapper::barrier();
-
-    // Group elements of all_sums_values to value_vectors and sort them into the gathered sums map
-    std::unordered_map<int, std::vector<double>> sums_gathered;
-    if(my_rank == result_rank){
-        for (size_t i = 0; i < total_number_nodes; i++){   
-            std::vector<int> value_vector;
-            int key = i;
-            for (size_t j = i; j < k+2; j++){
-                value_vector.push_back(all_sums_values[j]);
-            }
-            sums_gathered.emplace(key, value_vector);
-        }   
-    }
-    */
-    ///////////////////// End: Merge sums to one rank: /////////////////////
-    
+    if(my_rank == result_rank) std::cout << "debug 10" << std::endl;
     // result_rank computes epsilon
     if (my_rank == result_rank) {
         
@@ -211,6 +151,9 @@ std::unique_ptr<BetweennessCentralityApproximation::BC_e> BetweennessCentralityA
     */
 std::vector<std::vector<NodePath>> BetweennessCentralityApproximation::compute_sssp(const DistributedGraph& graph, unsigned int node_id, unsigned int dest_id, std::uint64_t total_number_nodes, const std::vector<std::uint64_t>& prefix_distribution) {
         const auto my_rank = MPIWrapper::get_my_rank();
+        
+        int result_rank = 0;
+        if(my_rank == result_rank) std::cout << "debug 3.1.1" << std::endl;
 
         // initialize all the necessary datastructeres
 		std::vector<std::vector<NodePath>> shortest_paths(total_number_nodes, std::vector<NodePath>{});
@@ -227,11 +170,13 @@ std::vector<std::vector<NodePath>> BetweennessCentralityApproximation::compute_s
 
 		shortest_paths[root_id] = { start };
 		shortest_paths_queue.emplace(my_rank, node_id, 0, std::move(start));
+        
+        if(my_rank == result_rank) std::cout << "debug 3.1.2" << std::endl;
 
 		while (!shortest_paths_queue.empty()) {
 			const auto [current_rank, current_id, current_distance, current_path] = shortest_paths_queue.top();
 			shortest_paths_queue.pop();
-
+            if(my_rank == result_rank) std::cout << "debug 3.1.2.1" << std::endl;
 			const auto& out_edges = graph.get_out_edges(current_rank, current_id);
 
             // Updating all nodes which are the head from the outgoing edges of the current node
@@ -239,7 +184,7 @@ std::vector<std::vector<NodePath>> BetweennessCentralityApproximation::compute_s
 				const auto new_distance = current_distance + std::abs(weight);
 
 				const auto other_node_id = prefix_distribution[target_rank] + target_id;
-
+                if(my_rank == result_rank) std::cout << "debug 3.1.2.1.1" << std::endl;
                 // No update 
 				if (distances[other_node_id] < new_distance) {
 					continue;
@@ -250,20 +195,21 @@ std::vector<std::vector<NodePath>> BetweennessCentralityApproximation::compute_s
 					distances[other_node_id] = new_distance;
 					shortest_paths[other_node_id].clear();
 				}
-
+                if(my_rank == result_rank) std::cout << "debug 3.1.2.1.2" << std::endl;
 				NodePath new_path = current_path;
 				new_path.append_node(other_node_id);
-
+                if(my_rank == result_rank) std::cout << "debug 3.1.2.1.3" << std::endl;
 				shortest_paths_queue.emplace(target_rank, target_id, new_distance, new_path);
 				shortest_paths[other_node_id].emplace_back(std::move(new_path));
+                
 			}
-
+            if(my_rank == result_rank) std::cout << "debug 3.1.2.2" << std::endl;
             // predicate for checking if we reached the destination
             if(current_id == dest_id) {
                 break;
             }
 		}
-
+        if(my_rank == result_rank) std::cout << "debug 3.1.3" << std::endl;
         return shortest_paths;
     }
 
@@ -277,14 +223,17 @@ std::unordered_map<int, double> BetweennessCentralityApproximation::getFunctionV
         MAYBE CHANAGE PARAMETERS TO UINT_64
     
     */
-
+    int my_rank = MPIWrapper::get_my_rank();
+    int result_rank = 0;
+    if(my_rank == result_rank) std::cout << "debug 3.1" << std::endl;
+    
     std::unordered_map<int, double> z{};
     const auto total_number_nodes = NodeCounter::all_count_nodes(graph);
     std::vector<std::vector<NodePath>> all_shortest_paths_to_all_nodes = compute_sssp(graph, sample.first, sample.second, total_number_nodes, prefix_distribution);
     int uv = all_shortest_paths_to_all_nodes[sample.second].size();
     std::vector<NodePath> shortest_paths = all_shortest_paths_to_all_nodes[sample.second];
     
-    
+    if(my_rank == result_rank) std::cout << "debug 3.2" << std::endl;
     /*
         Iterate over the shortest_paths[sample.t2]
         increment if internal node was found or insert it for the first time in a temporary map
@@ -304,7 +253,7 @@ std::unordered_map<int, double> BetweennessCentralityApproximation::getFunctionV
             }
         }
     }
-    
+    if(my_rank == result_rank) std::cout << "debug 3.3" << std::endl;
     int uvw = 0;
     for(int i = 0; i < temp_map.size(); i++) {
         // get value from temporary map
@@ -314,7 +263,7 @@ std::unordered_map<int, double> BetweennessCentralityApproximation::getFunctionV
             z.insert({i, value});
         }
     }
-
+    if(my_rank == result_rank) std::cout << "debug 3.4" << std::endl;
     return z;
 }    
 /*
