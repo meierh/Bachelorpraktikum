@@ -16,6 +16,6 @@
 
 void test_algorithm_parallelization(std::filesystem::path input_directory);
 
-void compareAreaConnecMap(const AreaConnectivity::AreaConnecMap& mapPar,const AreaConnectivity::AreaConnecMap& mapSeq);
+void compare_area_connec_map(const AreaConnectivity::AreaConnecMap& map_par,const AreaConnectivity::AreaConnecMap& map_seq);
 
-void compareEdgeLengthHistogram(const Histogram::HistogramData& histogramPar, const Histogram::HistogramData& histogramSeq, const double epsilon);
+void compare_edge_length_histogram(const Histogram::HistogramData& histogram_par, const Histogram::HistogramData& histogram_seq, const double epsilon);

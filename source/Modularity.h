@@ -25,7 +25,7 @@ public:
     (
         const DistributedGraph& graph
     );
-    static double computeModularitySingleProc
+    static double compute_modularity_sequential
     (
         const DistributedGraph& graph
     );

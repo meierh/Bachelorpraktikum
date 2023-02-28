@@ -12,7 +12,7 @@ double Modularity::compute_modularity
     
 //Gather area names to all ranks
     std::function<std::unique_ptr<std::vector<std::pair<std::string,int>>>(const DistributedGraph&)> 
-        get_Data = [&](const DistributedGraph& dg)
+        get_data = [&](const DistributedGraph& dg)
         {
             const std::vector<std::string>& area_names = dg.get_local_area_names();
             auto data = std::make_unique<std::vector<std::pair<std::string,int>>>(area_names.size());
@@ -24,9 +24,9 @@ double Modularity::compute_modularity
     std::unique_ptr<std::vector<std::vector<std::string>>> area_names_list_of_ranks = CommunicationPatterns::gather_Data_to_all_Ranks<std::string,char>
     (
         graph,
-        get_Data,
+        get_data,
         [](std::string area_name){return std::vector<char>(area_name.cbegin(),area_name.cend());},
-        [](std::vector<char>area_name_v){return std::string(area_name_v.data(),area_name_v.size());},
+        [](std::vector<char>area_name_vec){return std::string(area_name_vec.data(),area_name_vec.size());},
         MPI_CHAR
     );
         
@@ -52,31 +52,31 @@ double Modularity::compute_modularity
         {
             const int my_rank = MPIWrapper::get_my_rank();
             std::uint64_t node_area_localID = dg.get_node_area_localID(my_rank, node_localID);
-            auto key_Value = area_names_map.find(area_names[node_area_localID]);
-            assert(key_Value!=area_names_map.end()); 
-            std::uint64_t area_globalID = key_Value->second;
+            auto key_value = area_names_map.find(area_names[node_area_localID]);
+            assert(key_value!=area_names_map.end()); 
+            std::uint64_t area_globalID = key_value->second;
             
             auto outward_node_area = std::make_unique<std::vector<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>>>();
             
-            const std::vector<OutEdge>& oEdges = dg.get_out_edges(my_rank,node_localID);
-            for(const OutEdge& oEdge : oEdges)
+            const std::vector<OutEdge>& out_edges = dg.get_out_edges(my_rank,node_localID);
+            for(const OutEdge& out_edge : out_edges)
             {
-                std::uint64_t rank = oEdge.target_rank;
-                std::uint64_t id = oEdge.target_id;
+                std::uint64_t rank = out_edge.target_rank;
+                std::uint64_t id = out_edge.target_id;
                 outward_node_area->push_back(std::tie<std::uint64_t,std::uint64_t,std::uint64_t>
                                                         (rank,id,area_globalID));
             }
             return outward_node_area;
         };
     std::function<std::uint8_t(const DistributedGraph& dg,std::uint64_t node_localID,std::uint64_t area_globalID)> 
-        test_for_adjacent_equal_Area = 
+        test_for_adjacent_equal_area = 
                 [&](const DistributedGraph& dg,std::uint64_t node_localID,std::uint64_t area_globalID)
         {
             const int my_rank = MPIWrapper::get_my_rank();            
             std::uint64_t node_area_localID = dg.get_node_area_localID(my_rank, node_localID);
-            auto key_Value = area_names_map.find(area_names[node_area_localID]);
-            assert(key_Value!=area_names_map.end());            
-            if(area_globalID==key_Value->second)
+            auto key_value = area_names_map.find(area_names[node_area_localID]);
+            assert(key_value!=area_names_map.end());            
+            if(area_globalID==key_value->second)
             {
                 return 1;
             }
@@ -85,7 +85,7 @@ double Modularity::compute_modularity
     std::unique_ptr<CommunicationPatterns::NodeToNodeQuestionStructure<std::uint64_t,std::uint8_t>> adjacency_results;
     adjacency_results = CommunicationPatterns::node_to_node_question<std::uint64_t,std::uint8_t>
                             (graph,MPI_UINT64_T,collect_adjacency_area_info,
-                                   MPI_UINT8_T,test_for_adjacent_equal_Area);
+                                   MPI_UINT8_T,test_for_adjacent_equal_area);
                             
     std::uint64_t local_adjacency_sum = 0;
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
@@ -119,11 +119,11 @@ double Modularity::compute_modularity
         assert(key_value!=area_names_map.end());
         std::uint64_t area_globalID = key_value->second;
     
-        const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank,node_localID);
-        const std::vector<InEdge>& iEdges = graph.get_in_edges(my_rank,node_localID);
+        const std::vector<OutEdge>& out_edges = graph.get_out_edges(my_rank,node_localID);
+        const std::vector<InEdge>& in_edges = graph.get_in_edges(my_rank,node_localID);
         NodeModularityInfo node_info;
-        node_info.node_in_degree = iEdges.size();
-        node_info.node_out_degree = oEdges.size();
+        node_info.node_in_degree = in_edges.size();
+        node_info.node_out_degree = out_edges.size();
         node_info.area_globalID = area_globalID;
         
         area_globalID_to_node[area_globalID].push_back(node_info);
@@ -139,8 +139,8 @@ double Modularity::compute_modularity
             {
                 auto data = std::make_unique<std::vector<std::pair<NodeModularityInfo,int>>>(area_local_size);
                 std::transform(area_globalID_to_node[area_globalID].cbegin(), area_globalID_to_node[area_globalID].cend(),
-                               data->begin(),[](NodeModularityInfo modulInfo)
-                                    {return std::pair<NodeModularityInfo,int>(modulInfo,1);});            
+                               data->begin(),[](NodeModularityInfo modul_info)
+                                    {return std::pair<NodeModularityInfo,int>(modul_info,1);});            
                 return std::move(data);
             };
         
@@ -148,7 +148,7 @@ double Modularity::compute_modularity
         (
             graph,
             get_modularity_data,
-            [](NodeModularityInfo modulInfo){return std::vector<NodeModularityInfo>({modulInfo});},
+            [](NodeModularityInfo modul_info){return std::vector<NodeModularityInfo>({modul_info});},
             [](std::vector<NodeModularityInfo> node_info_vec){return node_info_vec[0];},
             MPIWrapper::MPI_nodeModularityInfo,
             calculation_rank
@@ -181,13 +181,13 @@ double Modularity::compute_modularity
     return (static_cast<double>(global_adjacency_sum) + global_in_out_degree_node_sum)/static_cast<double>(global_m);
 }
 
-double Modularity::computeModularitySingleProc
+double Modularity::compute_modularity_sequential
 (
     const DistributedGraph& graph
 )
 {
     // Define all relevant local variables
-    unsigned int resultToRank = 0;
+    unsigned int result_rank = 0;
     const int& my_rank = MPIWrapper::get_my_rank();
     const int& number_ranks = MPIWrapper::get_number_ranks();
     const int& number_local_nodes = graph.get_number_local_nodes();
@@ -215,18 +215,18 @@ double Modularity::computeModularitySingleProc
     assert(area_names_char_len.size() == number_area_names); //debug
     int nbr_area_names = area_names.size();
     std::vector<int> rank_to_number_area_names;
-    if(my_rank == resultToRank)
+    if(my_rank == result_rank)
     {
         rank_to_number_area_names.resize(number_ranks);
     }
-    MPIWrapper::gather<int>(&nbr_area_names, rank_to_number_area_names.data(), 1, MPI_INT, resultToRank);
+    MPIWrapper::gather<int>(&nbr_area_names, rank_to_number_area_names.data(), 1, MPI_INT, result_rank);
     MPIWrapper::barrier();
 
     // Crate char_len_displ as helper for global_area_names_char_len 
     // and prepare global_area_names_char_len with correct size
     std::vector<int> char_len_displ;
     std::vector<int> global_area_names_char_len;
-    if(my_rank == resultToRank)
+    if(my_rank == result_rank)
     {
         char_len_displ.resize(number_ranks);
         int displacement = 0;
@@ -243,12 +243,12 @@ double Modularity::computeModularitySingleProc
     // Gather global_area_names_char_len (with Help of char_len_displ and rank_to_number_area_names)
     MPIWrapper::gatherv<int>(area_names_char_len.data(), nbr_area_names,
                             global_area_names_char_len.data(), rank_to_number_area_names.data(), char_len_displ.data(),
-                            MPI_INT, resultToRank);
+                            MPI_INT, result_rank);
     MPIWrapper::barrier();
 
     // Finally create rank_to_area_names_char_len as helper for rank_to_area_names
     std::vector<std::vector<int>> rank_to_area_names_char_len;
-    if(my_rank==resultToRank)
+    if(my_rank==result_rank)
     {
         rank_to_area_names_char_len.resize(number_ranks);
         for(int r = 0; r < number_ranks-1; r++)
@@ -268,16 +268,16 @@ double Modularity::computeModularitySingleProc
     // Gather rank_to_string_len as helper for char_displ
     int nbr_string_chars = transmit_area_names_string.size();
     std::vector<int> rank_to_string_len;
-    if(my_rank == resultToRank)
+    if(my_rank == result_rank)
     {
         rank_to_string_len.resize(number_ranks);
     }
-    MPIWrapper::gather<int>(&nbr_string_chars, rank_to_string_len.data(), 1, MPI_INT, resultToRank);
+    MPIWrapper::gather<int>(&nbr_string_chars, rank_to_string_len.data(), 1, MPI_INT, result_rank);
     MPIWrapper::barrier();
 
     // Create char_displ as helper for rank_to_area_names
     std::vector<int> char_displ;
-    if(my_rank == resultToRank)
+    if(my_rank == result_rank)
     {
         char_displ.resize(number_ranks);
         int displacement = 0;
@@ -291,7 +291,7 @@ double Modularity::computeModularitySingleProc
 
     // Prepare and gather global_area_names_string as helper for rank_to_area_names
     std::vector<char> global_area_names_string;
-    if(my_rank == resultToRank)
+    if(my_rank == result_rank)
     {
         int sum = std::accumulate(rank_to_string_len.begin(),
                                     rank_to_string_len.end(), 0);
@@ -299,12 +299,12 @@ double Modularity::computeModularitySingleProc
     }
     MPIWrapper::gatherv<char>(transmit_area_names_string.data(), nbr_string_chars,
                               global_area_names_string.data(), rank_to_string_len.data(), char_displ.data(),
-                              MPI_CHAR, resultToRank);
+                              MPI_CHAR, result_rank);
     MPIWrapper::barrier();
     
     // Finally create rank_to_area_names
     std::vector<std::vector<std::string>> rank_to_area_names;
-    if(my_rank == resultToRank)
+    if(my_rank == result_rank)
     {
         rank_to_area_names.resize(number_ranks);
         int displacement = 0;
@@ -329,7 +329,7 @@ double Modularity::computeModularitySingleProc
     MPIWrapper::all_reduce<std::uint64_t>(&local_m,&m,1, MPI_UINT64_T, MPI_SUM);
 
     // Computation is performed by a single process:
-    if(my_rank == resultToRank)
+    if(my_rank == result_rank)
     {
         struct StdPair_hash
         {

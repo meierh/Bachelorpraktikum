@@ -1,16 +1,16 @@
 #include "Histogram.h"
 
-std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogramm_constBinWidth
+std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogram_const_bin_width
 (
     const DistributedGraph& graph,
     const double bin_width,
-    const unsigned int resultToRank
+    const unsigned int result_rank
 )
 {
     const int number_of_ranks = MPIWrapper::get_number_ranks();
-    if(resultToRank>=number_of_ranks)
+    if(result_rank>=number_of_ranks)
     {
-        throw std::invalid_argument("Bad parameter - resultToRank"+resultToRank);
+        throw std::invalid_argument("Bad parameter - result_rank"+result_rank);
     }
     if(bin_width<=0)
     {
@@ -53,20 +53,20 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogra
         return std::move(histogram);
     };
     
-    return std::move(compute_edgeLength_Histogramm(graph,bin_width_histogram_creator,resultToRank));
+    return std::move(compute_edge_length_histogram(graph,bin_width_histogram_creator,result_rank));
 }
 
-std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogramm_constBinCount
+std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogram_const_bin_count
 (
     const DistributedGraph& graph,
     const std::uint64_t bin_count,
-    const unsigned int resultToRank
+    const unsigned int result_rank
 )
 {
     const int number_of_ranks = MPIWrapper::get_number_ranks();
-    if(resultToRank>=number_of_ranks)
+    if(result_rank>=number_of_ranks)
     {
-        throw std::invalid_argument("Bad parameter - resultToRank"+resultToRank);
+        throw std::invalid_argument("Bad parameter - result_rank"+result_rank);
     }
     if(bin_count<1)
     {
@@ -102,14 +102,14 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogra
         return std::move(histogram);
     };
     
-    return std::move(compute_edgeLength_Histogramm(graph,bin_count_histogram_creator,resultToRank));
+    return std::move(compute_edge_length_histogram(graph,bin_count_histogram_creator,result_rank));
 }
 
-std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm_constBinWidthSingleProc
+std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogram_const_bin_width_sequential
 (
     const DistributedGraph& graph,
     double bin_width,
-    unsigned int resultToRank
+    unsigned int result_rank
 )
 {
     std::function<std::unique_ptr<HistogramData>(double,double)> bin_width_histogram_creator =
@@ -136,14 +136,14 @@ std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm_constB
         assert(histogram->back().first.second>max_length);
         return std::move(histogram);
     };
-    return std::move(edgeLengthHistogramSingleProc(graph,bin_width_histogram_creator,resultToRank));
+    return std::move(compute_edge_length_histogram_sequential(graph,bin_width_histogram_creator,result_rank));
 }
 
-std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm_constBinCountSingleProc
+std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogram_const_bin_count_sequential
 (
     const DistributedGraph& graph,
     std::uint64_t bin_count,
-    unsigned int resultToRank
+    unsigned int result_rank
 )
 {
     if(bin_count<1)
@@ -176,23 +176,23 @@ std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramm_constB
         assert(histogram->back().first.second>max_length);
         return std::move(histogram);
     };
-    return std::move(edgeLengthHistogramSingleProc(graph,bin_count_histogram_creator,resultToRank));
+    return std::move(compute_edge_length_histogram_sequential(graph,bin_count_histogram_creator,result_rank));
 }
 
 
-std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogramm
+std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogram
 (
     const DistributedGraph& graph,
     const std::function<std::unique_ptr<HistogramData>(const double, const double)> histogram_creator,
-    const unsigned int resultToRank
+    const unsigned int result_rank
 )
 {
 // Test function parameters
     const int my_rank = MPIWrapper::get_my_rank();
     const int number_of_ranks = MPIWrapper::get_number_ranks();
-    if(resultToRank>=number_of_ranks)
+    if(result_rank>=number_of_ranks)
     {
-        throw std::invalid_argument("Bad parameter - resultToRank:"+resultToRank);
+        throw std::invalid_argument("Bad parameter - result_rank:"+result_rank);
     }
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
         
@@ -263,15 +263,15 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogra
         histogram_pure_count_src[i] = (*histogram)[i].second;
     }
     std::vector<std::uint64_t> histogram_pure_count_dest;
-    if(my_rank==resultToRank)
+    if(my_rank==result_rank)
     {
         histogram_pure_count_dest.resize(histogram->size());
     }    
     MPIWrapper::reduce<std::uint64_t>(histogram_pure_count_src.data(),histogram_pure_count_dest.data(),
-                                      histogram->size(),MPI_UINT64_T,MPI_SUM,resultToRank);
+                                      histogram->size(),MPI_UINT64_T,MPI_SUM,result_rank);
     
 // Reconstruct resulting histogram with global data
-    if(my_rank==resultToRank)
+    if(my_rank==result_rank)
     {
         for(int i=0;i<histogram->size();i++)
         {
@@ -286,11 +286,11 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edgeLength_Histogra
     return std::move(histogram);
 }
 
-std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramSingleProc
+std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogram_sequential
 (
     const DistributedGraph& graph,
     std::function<std::unique_ptr<HistogramData>(double, double)> histogram_creator,
-    unsigned int resultToRank
+    unsigned int result_rank
 )
 {
     const int my_rank = MPIWrapper::get_my_rank();
@@ -300,12 +300,12 @@ std::unique_ptr<Histogram::HistogramData> Histogram::edgeLengthHistogramSinglePr
     std::vector<std::uint64_t> number_nodes_of_ranks;
     number_nodes_of_ranks.resize(number_ranks);
     std::uint64_t number_local_nodes = graph.get_number_local_nodes();
-    MPIWrapper::gather<uint64_t>(&number_local_nodes, number_nodes_of_ranks.data(), 1, MPI_UINT64_T, resultToRank);
+    MPIWrapper::gather<uint64_t>(&number_local_nodes, number_nodes_of_ranks.data(), 1, MPI_UINT64_T, result_rank);
     auto histogram = std::make_unique<std::vector<std::pair<std::pair<double,double>,std::uint64_t>>>();
 
     // Only the main rank collects all edge lengths and sorts each length into the 
     // buckets of the histogram created using the supplied function
-    if(my_rank == resultToRank)
+    if(my_rank == result_rank)
     {   
         std::vector<double> edge_lengths;
 

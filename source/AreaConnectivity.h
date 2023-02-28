@@ -17,7 +17,7 @@ public:
      * 
      * Parameters 
      * graph:           A DistributedGraph (Function is MPI compliant)
-     * resultToRank:    MPI Rank to receive the results
+     * result_rank:    MPI Rank to receive the results
      *
      * Returns: std::unordered_map with the a pair of area names as key 
      *          and the summed weight as value. 
@@ -32,9 +32,9 @@ public:
         }
     };    
     using AreaConnecMap = std::unordered_map<std::pair<std::string,std::string>,int,StdPair_hash>;
-    static std::unique_ptr<AreaConnecMap> compute_area_connectivity_strength(const DistributedGraph& graph,unsigned int resultToRank=0);
-    static std::unique_ptr<AreaConnecMap> areaConnectivityStrengthSingleProc_Helge(const DistributedGraph& graph,unsigned int resultToRank=0);    
-    static std::unique_ptr<AreaConnecMap> areaConnectivityStrengthSingleProc(const DistributedGraph& graph,unsigned int resultToRank=0);
+    static std::unique_ptr<AreaConnecMap> compute_area_connectivity_strength(const DistributedGraph& graph,unsigned int result_rank=0);
+    static std::unique_ptr<AreaConnecMap> area_connectivity_strength_sequential_helge(const DistributedGraph& graph,unsigned int result_rank=0);    
+    static std::unique_ptr<AreaConnecMap> area_connectivity_strength_sequential(const DistributedGraph& graph,unsigned int result_rank=0);
     /*------------------areaConnectivityStrength--------------------------|||*/
     
 private:
