@@ -1,0 +1,20 @@
+---
+# CONFIG FILE FOR CLANG-FORMAT:
+
+# Documentation:
+# https://bcain-llvm.readthedocs.io/projects/clang/en/latest/ClangFormatStyleOptions/
+
+IndentWidth: '8'
+TabWidth: '8'
+UseTab: Always
+ColumnLimit: 120
+PointerAlignment: Left
+AccessModifierOffset: '-8'
+AllowShortFunctionsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes
+
+# Some defaults that do not need to be set explicitly:
+#AlignOperands: Align
+#PenaltyBreakAssignment: '8'
+#IndentCaseLabels: false
+#AllowShortCaseLabelsOnASingleLine: false
