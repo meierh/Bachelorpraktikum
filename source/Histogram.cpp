@@ -257,7 +257,7 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 		std::vector<double> edge_lengths;
 
 		double max_length = 0;					// assumption: min edge length is 0
-		double min_length = std::numeric_limits<double>::max(); // assumption: max edge length is 300
+		double min_length = std::numeric_limits<double>::max();
 
 		// Iterate through each rank...
 		for (int rank = 0; rank < number_ranks; rank++) {

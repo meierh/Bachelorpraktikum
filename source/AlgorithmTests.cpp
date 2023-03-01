@@ -93,13 +93,63 @@ void test_centrality_approx(std::filesystem::path input_directory) {
 	double d = 0.25;
 	int k = 10;
 
+	unsigned int src_id = 0;
+	unsigned int dest_id = 5;
+	const auto total_number_nodes = NodeCounter::all_count_nodes(dg);
+	const auto node_distribution = NodeDistributionCounter::all_count_node_distribution(dg);
+	const auto prefix_distribution = calculate_prefix_sum(node_distribution);
+
 	std::cout << "Start betweennessCentralityApprox..." << std::endl;
 	try {
-		betweenness_centrality =
-		    BetweennessCentralityApproximation::compute_betweenness_centrality_approx(dg, m, d, k);
 		MPIWrapper::barrier();
-		/*...*/
+
+		if(my_rank == 0) {
+			
+			//Print local number of nodes of rank 0:
+			const auto number_local_nodes = dg.get_number_local_nodes();
+			std::cout << "rank0: number_local_nodes = " << number_local_nodes << std::endl;
+			
+			//Print all out_edges of rank 0:
+			for (size_t i = 0; i < number_local_nodes; i++) {
+				const auto& out_edges = dg.get_out_edges(0, i);
+				for(OutEdge out_edge : out_edges){
+					std::cout << "out_edge[node" << i << "] = " << out_edge.target_rank << "," << out_edge.target_id << " (" << out_edge.weight << ")" << std::endl;
+				}
+			}
+
+			//Print all in_edges of rank 0:
+			for (size_t i = 0; i < number_local_nodes; i++) {
+				const auto& in_edges = dg.get_in_edges(0, i);
+				for(InEdge in_edge : in_edges){
+					std::cout << "in_edge[node" << i << "] = " << in_edge.source_rank << "," << in_edge.source_id << " (" << in_edge.weight << ")" << std::endl;
+				}
+			}
+			
+			std::vector<std::vector<NodePath>> ssp = 
+			    BetweennessCentralityApproximation::compute_sssp(dg, src_id, dest_id, total_number_nodes, prefix_distribution);
+			//Print NodePath
+			std::cout << "Print SSP: " << std::endl;
+			for (size_t i = 0; i < ssp.size(); i++) {
+				
+				std::cout << i << ". spp: "  << std::endl; 
+				for (size_t j = 0; j < ssp[i].size(); j++) {
+					
+					std::cout << "path = { "; 
+					for (size_t k = 0; k < ssp[i][j].get_nodes().size(); k++) {
+						
+						std::cout << ssp[i][j].get_nodes().at(k) << ", "; 
+					}
+					std::cout << "}" << std::endl; 
+				}
+			}
+		} 
+		MPIWrapper::barrier();
+		
+		//betweenness_centrality = BetweennessCentralityApproximation::compute_betweenness_centrality_approx(dg, m, d, k);
+		//MPIWrapper::barrier();
+
 		test_result = "BetweennessCentralityApprox test completed";
+		
 	} catch (std::string error_code) {
 		test_result = "BetweennessCentralityApprox Error :" + error_code;
 	}

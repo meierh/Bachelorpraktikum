@@ -79,6 +79,7 @@ int main(int argument_count, char* arguments[]) {
 	MPIWrapper::init(argument_count, arguments);
 
 	test_algorithm_parallelization(input_directory);
+	//test_centrality_approx(input_directory);
 
 	MPIWrapper::finalize();
 

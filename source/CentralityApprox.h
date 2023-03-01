@@ -56,14 +56,14 @@ public:
 	
 	static std::unique_ptr<BC_e> compute_betweenness_centrality_approx(const DistributedGraph& graph, int m, double d, int k, unsigned int result_rank=0);
 
-private:
+//private:
 	/*
 	The helper functions use int values as unique node ids while BC returns nodes as (rank_id, node_id) pairs.
 	*/
 	static std::pair<int, int> drawSample(const DistributedGraph& graph, int number_ranks, int number_local_nodes, std::vector<std::uint64_t> prefix_distribution);
 	static std::unordered_map<int, double> getFunctionValues(const DistributedGraph& graph, std::pair<int, int> sample, const std::vector<std::uint64_t>& prefix_distribution);
 	static std::vector<double> drawRademacher(int k);
-	static std::vector<std::vector<NodePath>> compute_sssp(const DistributedGraph& graph, unsigned int node_id, unsigned int dest_id, std::uint64_t total_number_nodes, const std::vector<std::uint64_t>& prefix_distribution);
+	static std::vector<std::vector<NodePath>> compute_sssp(const DistributedGraph& graph, unsigned int src_id, unsigned int dest_id, std::uint64_t total_number_nodes, const std::vector<std::uint64_t>& prefix_distribution);
 
 	static double getEpsilon(std::vector<std::vector<double>> sums, int m, double d, int k);
 

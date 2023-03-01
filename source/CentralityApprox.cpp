@@ -145,11 +145,71 @@ std::unique_ptr<BetweennessCentralityApproximation::BC_e> BetweennessCentralityA
 }
 
 
+
+///////////////////////////////////// JUST DEBUG-TOOLS //////////////////////////////////////////////////
+/*
+    // Print sums:
+    // std::vector<std::vector<double>> sums; 
+    if(my_rank == result_rank){
+        std::cout << "Print SUMS:" << std::endl;
+        for(size_t i = 0; i < sums.size(); i++){
+            std::cout << "sums[" << i << "] = {"; 
+            for (size_t j = 0; j < sums[i].size(); j++){
+                std::cout << sums[i][j] << ", ";
+            }
+            std::cout << "}" << std::endl;
+        }
+    }
+
+    // Print stats:
+    std::cout << "rank: " << my_rank << "(total: " << number_ranks << ")\n" <<
+                 "nodes: " << number_local_nodes << "(total: )" << total_number_nodes << ")\n" << std::endl;
+
+    // Print prefix_distr:
+    if(my_rank == result_rank){
+        std::cout << "Print PREFIX_DISTR: " << std::endl; 
+        for (size_t i = 0; i < prefix_distribution.size(); i++){
+            std::cout << "prefix_distribution[" << i << "] = " << prefix_distribution[i] << "\n";
+        }
+        std::cout << std::endl; 
+    }
+
+    // Print Z
+    // std::unordered_map<int, double> Z = getFunctionValues(...);
+    if(my_rank == result_rank){
+        std::cout << "Print Z: " << std::endl;
+        for (auto x = Z.begin(); x != Z.end(); x++){
+            std::cout << x->first << " -> " << x->second;
+        }
+    }
+
+    // Print NodePath
+    // std::vector<std::vector<NodePath>> ssp = compute_ssp(...);
+    std::cout << "Print SSP: " << std::endl; 
+    for (size_t i = 0; i < ssp.size(); i++) {
+        
+        std::cout << i << ". spp: "  << std::endl; 
+        for (size_t j = 0; j < ssp[i].size(); j++) {
+            
+            std::cout << "path = { "; 
+            for (size_t k = 0; k < ssp[i][j].get_nodes().size(); k++) {
+                
+                std::cout << ssp[i][j].get_nodes().at(k) << ", "; 
+            }
+            std::cout << "}" << std::endl; 
+        }
+    }
+
+*/
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
     /*
         Compute shortest paths
         Returns: shortest paths from given startnode to the given destinationnode
     */
-std::vector<std::vector<NodePath>> BetweennessCentralityApproximation::compute_sssp(const DistributedGraph& graph, unsigned int node_id, unsigned int dest_id, std::uint64_t total_number_nodes, const std::vector<std::uint64_t>& prefix_distribution) {
+std::vector<std::vector<NodePath>> BetweennessCentralityApproximation::compute_sssp(const DistributedGraph& graph, unsigned int src_id, unsigned int dest_id, std::uint64_t total_number_nodes, const std::vector<std::uint64_t>& prefix_distribution) {
         const auto my_rank = MPIWrapper::get_my_rank();
         
         int result_rank = 0;
@@ -161,55 +221,51 @@ std::vector<std::vector<NodePath>> BetweennessCentralityApproximation::compute_s
 
 		std::priority_queue<VertexDistancePath, std::vector<VertexDistancePath>, std::greater<VertexDistancePath>> shortest_paths_queue{};
 
-		const auto root_id = prefix_distribution[my_rank] + node_id;
-
-		distances[root_id] = 0;
+		distances[src_id] = 0;
 
 		NodePath start(20);
-		start.append_node(node_id);
+		start.append_node(src_id);
 
-		shortest_paths[root_id] = { start };
-		shortest_paths_queue.emplace(my_rank, node_id, 0, std::move(start));
-        
-        if(my_rank == result_rank) std::cout << "debug 3.1.2" << std::endl;
+		shortest_paths[src_id] = { start };
+		shortest_paths_queue.emplace(my_rank, src_id, 0, std::move(start));
 
 		while (!shortest_paths_queue.empty()) {
 			const auto [current_rank, current_id, current_distance, current_path] = shortest_paths_queue.top();
 			shortest_paths_queue.pop();
-            if(my_rank == result_rank) std::cout << "debug 3.1.2.1" << std::endl;
-			const auto& out_edges = graph.get_out_edges(current_rank, current_id);
+			const auto& out_edges = graph.get_out_edges(current_rank, current_id-prefix_distribution[my_rank]);
+
+            std::cout << "rank" << my_rank << ": considered node " << current_rank << "," << current_id-prefix_distribution[my_rank] << std::endl;
 
             // Updating all nodes which are the head from the outgoing edges of the current node
 			for (const auto& [target_rank, target_id, weight] : out_edges) {
-				const auto new_distance = current_distance + std::abs(weight);
+                
+                std::cout << ">>> rank" << my_rank << ": considered edge " << current_rank << "," << current_id << "--(" << weight << ")->" << target_rank << "," << target_id << std::endl;
 
+                const auto new_distance = current_distance + std::abs(weight);
 				const auto other_node_id = prefix_distribution[target_rank] + target_id;
-                if(my_rank == result_rank) std::cout << "debug 3.1.2.1.1" << std::endl;
-                // No update 
+                
+                // No update
 				if (distances[other_node_id] < new_distance) {
-					continue;
-				}
-
+					std::cout << ">>> >>> rank" << my_rank << ": edge from " << prefix_distribution[my_rank] + current_id << " to " << other_node_id << " is not interesting" << std::endl;
+                    continue;
+                }
+                std::cout << ">>> >>> rank" << my_rank << ": edge from " << prefix_distribution[my_rank] + current_id << " to " << other_node_id << " is ADDED" << std::endl;
+                
                 // Update: update distance and clear the shortest path to this node ()
 				if (distances[other_node_id] > new_distance) {
 					distances[other_node_id] = new_distance;
 					shortest_paths[other_node_id].clear();
 				}
-                if(my_rank == result_rank) std::cout << "debug 3.1.2.1.2" << std::endl;
 				NodePath new_path = current_path;
 				new_path.append_node(other_node_id);
-                if(my_rank == result_rank) std::cout << "debug 3.1.2.1.3" << std::endl;
 				shortest_paths_queue.emplace(target_rank, target_id, new_distance, new_path);
 				shortest_paths[other_node_id].emplace_back(std::move(new_path));
-                
 			}
-            if(my_rank == result_rank) std::cout << "debug 3.1.2.2" << std::endl;
             // predicate for checking if we reached the destination
             if(current_id == dest_id) {
                 break;
             }
 		}
-        if(my_rank == result_rank) std::cout << "debug 3.1.3" << std::endl;
         return shortest_paths;
     }
 
@@ -225,7 +281,6 @@ std::unordered_map<int, double> BetweennessCentralityApproximation::getFunctionV
     */
     int my_rank = MPIWrapper::get_my_rank();
     int result_rank = 0;
-    if(my_rank == result_rank) std::cout << "debug 3.1" << std::endl;
     
     std::unordered_map<int, double> z{};
     const auto total_number_nodes = NodeCounter::all_count_nodes(graph);
@@ -233,7 +288,6 @@ std::unordered_map<int, double> BetweennessCentralityApproximation::getFunctionV
     int uv = all_shortest_paths_to_all_nodes[sample.second].size();
     std::vector<NodePath> shortest_paths = all_shortest_paths_to_all_nodes[sample.second];
     
-    if(my_rank == result_rank) std::cout << "debug 3.2" << std::endl;
     /*
         Iterate over the shortest_paths[sample.t2]
         increment if internal node was found or insert it for the first time in a temporary map
