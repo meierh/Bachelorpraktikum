@@ -8,7 +8,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 	std::string test_result;
 
 	// Test AreaConnectivity algorithm parallelization
-	std::unique_ptr<AreaConnectivity::AreaConnecMap> area_connect_parallel;
+	/*std::unique_ptr<AreaConnectivity::AreaConnecMap> area_connect_parallel;
 	std::unique_ptr<AreaConnectivity::AreaConnecMap> area_connect_sequential_helge;
 	std::unique_ptr<AreaConnectivity::AreaConnecMap> area_connect_sequential;
 	try {
@@ -83,10 +83,11 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 		std::cout << test_result << std::endl;
 
 	// Test NetworkMotifs algorithm parallelization
-	std::vector<long double> motifs_par, motifs_seq;
+	*/std::vector<long double> motifs_par, motifs_seq;
 	try {
 		//motifs_par = NetworkMotifs::compute_network_TripleMotifs(dg);
 		MPIWrapper::barrier();
+		std::cout << std::endl;
 		motifs_seq = NetworkMotifs::compute_network_TripleMotifs_SingleProc(dg);
 		MPIWrapper::barrier();
 

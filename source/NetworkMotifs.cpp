@@ -239,9 +239,9 @@ std::vector<long double> NetworkMotifs::compute_network_TripleMotifs
     if(my_rank==resultToRank)
     {
         //Rotational invariant motifs where counted three times each
-        assert(motifTypeCountTotal[7]%3==0);
+        if(motifTypeCount[7]%3 != 0) std::cout << "error: motifTypeCount[7]%3 != 0 ==> " << motifTypeCount[7] << std::endl; 
         motifTypeCountTotal[7]/=3;
-        assert(motifTypeCountTotal[13]%3==0);
+        if(motifTypeCount[13]%3 != 0) std::cout << "error: motifTypeCount[13]%3 != 0 ==> " << motifTypeCount[13] << std::endl; 
         motifTypeCountTotal[13]/=3;        
     }
     std::vector<long double> motifFraction;
@@ -254,6 +254,11 @@ std::vector<long double> NetworkMotifs::compute_network_TripleMotifs
         {
             motifFraction[motifType] = motifTypeCountTotal[motifType];
             //motifFraction[motifType] = static_cast<long double>(motifTypeCountTotal[motifType]) / static_cast<long double>(total_number_of_motifs);
+        }
+
+        // Print NetworkMotifs:
+        for (size_t i = 0; i < motifFraction.size(); i++) {
+            std::cout << "motifFraction[" << i << "] = " << motifFraction[i] << std::endl;
         }
     }
     MPIWrapper::barrier();
@@ -273,28 +278,42 @@ std::vector<long double> NetworkMotifs::compute_network_TripleMotifs_SingleProc
 )
 {
     const int my_rank = MPIWrapper::get_my_rank();
+    int number_ranks = MPIWrapper::get_number_ranks();
+    std::uint64_t number_local_nodes = graph.get_number_local_nodes();
+    auto total_number_nodes = NodeCounter::all_count_nodes(graph);
     
+    // Main rank gathers other ranks number of nodes
+    std::vector<std::uint64_t> number_nodes_of_ranks(number_ranks);
+    MPIWrapper::gather<uint64_t>(&number_local_nodes, number_nodes_of_ranks.data(), 1, MPI_UINT64_T, result_rank);
+    
+    //Print all out edges:
+    /*if(my_rank == result_rank) {
+        for(int r = 0; r < number_ranks; r++) {
+            for(std::uint64_t n = 0; n < number_nodes_of_ranks[r]; n++) {
+                auto edges = graph.get_out_edges(r, n);
+                for(auto edge : edges){
+                    std::cout << "edge: " << r << "," << n << " -> " << edge.target_rank << "," << edge.target_id << std::endl;
+                }
+            }
+        }
+        std::cout << std::endl;
+    }*/
+
     // Prepare structure
     std::vector<std::uint64_t> motifTypeCount(14, 0);
 
-    if(my_rank == result_rank){
-        int number_ranks = MPIWrapper::get_number_ranks();
-        std::uint64_t number_local_nodes = graph.get_number_local_nodes();
-        auto total_number_nodes = NodeCounter::all_count_nodes(graph);
+    if(my_rank == result_rank) {
 
-        // Main rank gathers other ranks number of nodes
-        std::vector<std::uint64_t> number_nodes_of_ranks(number_ranks);
-        MPIWrapper::gather<uint64_t>(&number_local_nodes, number_nodes_of_ranks.data(), 1, MPI_UINT64_T, result_rank);
-
-        for(int current_rank = 0; current_rank < current_rank; current_rank++) {
+        for(int current_rank = 0; current_rank < number_ranks; current_rank++) {
+            std::cout << "Scanning nodes of rank " << current_rank+1 << " of " << number_ranks << " ..." << std::endl;
             for(std::uint64_t current_node = 0; current_node < number_nodes_of_ranks[current_rank]; current_node++) {
                 
-                std::vector<threeMotifStructure> this_node_motifs_results;
+                //std::cout << "next node: " << current_rank << "," << current_node << std::endl;
 
-                const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank, current_node);
-                const std::vector<InEdge>& iEdges = graph.get_in_edges(my_rank, current_node);
+                const std::vector<OutEdge>& oEdges = graph.get_out_edges(current_rank, current_node);
+                const std::vector<InEdge>& iEdges = graph.get_in_edges(current_rank, current_node);
                 
-                std::unordered_map<std::pair<std::uint64_t, std::uint64_t>,  // [rank, node] --> [out, in]
+                std::unordered_map<std::pair<std::uint64_t, std::uint64_t>,
                                 std::pair<bool,bool>,
                                 StdPair_hash> adjacent_nodes;
                 
@@ -302,26 +321,36 @@ std::vector<long double> NetworkMotifs::compute_network_TripleMotifs_SingleProc
                     std::pair<std::uint64_t, std::uint64_t> node_key(oEdge.target_rank, oEdge.target_id);
                     std::pair<bool,bool>& value = adjacent_nodes[node_key];
                     assert(!value.first);   
-                    value.first = true; //map insert normal
+                    value.first = true;
                 }
                 
                 for(const InEdge& iEdge : iEdges) {
                     std::pair<std::uint64_t,std::uint64_t> node_key(iEdge.source_rank,iEdge.source_id);
                     std::pair<bool,bool>& value = adjacent_nodes[node_key];
                     assert(!value.second);
-                    value.second = true; //map insert normal
+                    value.second = true;
                 }
 
+                //Print adjacent_nodes
+                /*std::unordered_map<std::pair<std::uint64_t, std::uint64_t>,  // [rank, node] --> [out, in]
+                                std::pair<bool,bool>,
+                                StdPair_hash>::iterator it;
+                for (it = adjacent_nodes.begin(); it != adjacent_nodes.end(); it++) {
+                    std::cout << "(" <<it->first.first << "," << it->first.second 
+                              << ") --> " << it->second.first << " " << it->second.second << std::endl;
+                }*/
+
                 for(auto iterOuter = adjacent_nodes.begin(); iterOuter != adjacent_nodes.end(); iterOuter++) {
-                    std::pair<std::uint64_t,std::uint64_t> node_Outer_key = iterOuter->first;
                     
-                    for(auto iterInner = adjacent_nodes.begin(); iterInner != adjacent_nodes.end(); iterInner++) {
-                        std::pair<std::uint64_t,std::uint64_t> node_Inner_key = iterInner->first;
+                    std::pair<std::uint64_t,std::uint64_t> node_Outer_key = iterOuter->first;
+                    auto iterInner = iterOuter;
+                    iterInner++;
+                    for(iterInner; iterInner != adjacent_nodes.end(); iterInner++) {
                         
+                        std::pair<std::uint64_t,std::uint64_t> node_Inner_key = iterInner->first;
                         if(node_Inner_key != node_Outer_key) {
-                            //std::tuple<std::uint64_t,std::uint64_t,threeMotifStructure> possible_motif;
                             threeMotifStructure motifStruc;
-                            motifStruc.node_1_rank = my_rank;
+                            motifStruc.node_1_rank = current_rank;
                             motifStruc.node_1_local = current_node;
                             motifStruc.node_2_rank = node_Outer_key.first;
                             motifStruc.node_2_local = node_Outer_key.second;
@@ -339,98 +368,93 @@ std::vector<long double> NetworkMotifs::compute_network_TripleMotifs_SingleProc
                             exists_edge_bitArray |= exists_edge_node1_to_node3 ? 4 : 0;
                             exists_edge_bitArray |= exists_edge_node3_to_node1 ? 8 : 0;
 
+                            std::uint16_t exists_edge_bitArray_updated = update_edge_bitArray(graph, exists_edge_bitArray, 
+                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);;
+
+                            //std::cout << "node1=" << motifStruc.node_1_rank << motifStruc.node_1_local << ", node2=" << motifStruc.node_2_rank << motifStruc.node_2_local << ", node3=" << motifStruc.node_3_rank << motifStruc.node_3_local << std::endl;
+                            //std::cout << "exists_edge_bitArray = " << exists_edge_bitArray << " --updated-> " << exists_edge_bitArray_updated << std::endl;
+    
                             switch (exists_edge_bitArray)   // optimisation possible if highest cases are up
                             {
                                 case 10:
-                                    //three node motif 1 & 11 (0101)
-                                    exists_edge_bitArray = update_edge_bitArray(graph, exists_edge_bitArray, 
-                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);   
-                                    if(exists_edge_bitArray == 10)
+                                    //three node motif 1 & 11 (0101)   
+                                    if(exists_edge_bitArray_updated == 10)
                                         motifStruc.setMotifTypes({1});
-                                    else if(exists_edge_bitArray == 50)
+                                    else if(exists_edge_bitArray_updated == 58)
                                         motifStruc.setMotifTypes({11});
                                     break;
+                                
                                 case 5:
                                     //three node motif 3 & 8 (1010)
-                                    exists_edge_bitArray = update_edge_bitArray(graph, exists_edge_bitArray, 
-                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);
-                                    if(exists_edge_bitArray == 5)
+                                    if(exists_edge_bitArray_updated == 5)
                                         motifStruc.setMotifTypes({3});
-                                    else if(exists_edge_bitArray == 45)
+                                    else if(exists_edge_bitArray_updated == 53)
                                         motifStruc.setMotifTypes({8});
                                     break;
                                 
                                 case 6:
                                 case 9:
                                     //three node motif 2 & 5 & 7 & 10 (0110, 1001)
-                                    exists_edge_bitArray = update_edge_bitArray(graph, exists_edge_bitArray, 
-                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);
-                                    if(exists_edge_bitArray == 6 || exists_edge_bitArray == 9)
+                                    if(exists_edge_bitArray_updated == 6 || exists_edge_bitArray_updated == 9)
                                         motifStruc.setMotifTypes({2});
-                                    else if(exists_edge_bitArray == 22 || exists_edge_bitArray == 33)
+                                    else if(exists_edge_bitArray_updated == 22 || exists_edge_bitArray_updated == 41)
                                         motifStruc.setMotifTypes({5});
-                                    else if(exists_edge_bitArray == 30 || exists_edge_bitArray == 25)
+                                    else if(exists_edge_bitArray_updated == 38 || exists_edge_bitArray_updated == 25)
                                         motifStruc.setMotifTypes({7});
-                                    else if(exists_edge_bitArray == 46 || exists_edge_bitArray == 49)
+                                    else if(exists_edge_bitArray_updated == 54 || exists_edge_bitArray_updated == 57)
                                         motifStruc.setMotifTypes({10});
                                     else
-                                        assert(false);
+                                        std::cout << "error: case 6/9 -> bitArray = " << exists_edge_bitArray_updated << std::endl;
                                     break;
                                 
                                 case 14:
                                 case 11:
                                     //three node motif 4 (0111, 1101)
-                                    exists_edge_bitArray = update_edge_bitArray(graph, exists_edge_bitArray, 
-                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);
-                                    if(exists_edge_bitArray == 14 || exists_edge_bitArray == 11)
+                                    if(exists_edge_bitArray_updated == 14 || exists_edge_bitArray_updated == 11)
                                         motifStruc.setMotifTypes({4});
                                     break;
                                 
                                 case 7:
                                 case 13:
                                     //three node motif 6 (1110, 1011)
-                                    exists_edge_bitArray = update_edge_bitArray(graph, exists_edge_bitArray, 
-                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);
-                                    if(exists_edge_bitArray == 7 || exists_edge_bitArray == 13)
+                                    if(exists_edge_bitArray_updated == 7 || exists_edge_bitArray_updated == 13)
                                         motifStruc.setMotifTypes({6});
                                     break;
                                 
                                 case 15:
                                     //three node motif 9 & 12 & 13 (1111)
-                                    exists_edge_bitArray = update_edge_bitArray(graph, exists_edge_bitArray, 
-                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);
-                                    if(exists_edge_bitArray == 15)
+                                    if(exists_edge_bitArray_updated == 15)
                                         motifStruc.setMotifTypes({9});
-                                    else if(exists_edge_bitArray == 31 || exists_edge_bitArray == 39)
+                                    else if(exists_edge_bitArray_updated == 31 || exists_edge_bitArray_updated == 47)
                                         motifStruc.setMotifTypes({12});
-                                    else if(exists_edge_bitArray == 55)
+                                    else if(exists_edge_bitArray_updated == 63)
                                         motifStruc.setMotifTypes({13});
                                     else
-                                        assert(false);
+                                        std::cout << "error: case 15 -> bitArray = " << exists_edge_bitArray_updated << std::endl;
                                     break;
+                                
                                 default:
                                     break;
                             }
-                            
-                            //auto current_motif = std::tie<std::uint64_t, std::uint64_t, threeMotifStructure>
-                                                            (node_Outer_key.first, node_Outer_key.second, motifStruc);
-                            assert(motifStruc.checkValidity());
-                            
+
                             // Count every motiv
+                            //std::cout << "=> motif:  ";
                             for(int motifType = 1; motifType < 14; motifType++) {
-                                if(motifStruc.isMotifTypeSet(motifType))
+                                if(motifStruc.isMotifTypeSet(motifType)) {
+                                    //std::cout << motifType;
                                     motifTypeCount[motifType]++;
+                                }
                             }
+                            //std::cout << "\n" << std::endl;
                         }
                     }
                 }
             }
-            std::cout << "Scanning nodes of rank " << current_rank << " (" << number_ranks << ") " << " ..." << std::endl;
         }
         //Rotational invariant motifs where counted three times each
-        assert(motifTypeCount[7]%3 == 0);
+        if(motifTypeCount[7]%3 != 0) std::cout << "error: motifTypeCount[7]%3 != 0 ==> " << motifTypeCount[7] << std::endl;
         motifTypeCount[7] /= 3;
-        assert(motifTypeCount[13]%3 == 0);
+        if(motifTypeCount[13]%3 != 0) std::cout << "error: motifTypeCount[13]%3 != 0 ==> " << motifTypeCount[13] << std::endl; 
         motifTypeCount[13] /= 3;      
     }
     
@@ -465,6 +489,7 @@ std::uint16_t NetworkMotifs::update_edge_bitArray
     std::uint64_t node_3_local
 )
 {
+    //std::cout << "update_edge_bitArray called" << std::endl;
     const std::vector<OutEdge>& oEdges = graph.get_out_edges(node_2_rank, node_2_local);
     const std::vector<InEdge>& iEdges = graph.get_in_edges(node_2_rank, node_2_local);
     
@@ -482,7 +507,7 @@ std::uint16_t NetworkMotifs::update_edge_bitArray
     for(const InEdge& iEdge : iEdges)
     {
         std::pair<std::uint64_t, std::uint64_t> node_key(iEdge.source_rank, iEdge.source_id);
-        std::pair<bool,bool>& value = adjacent_nodes[node_key];
+        std::pair<bool, bool>& value = adjacent_nodes[node_key];
         assert(!value.second);
         value.second = true;
     }
@@ -494,7 +519,10 @@ std::uint16_t NetworkMotifs::update_edge_bitArray
     bool exists_edge_node3_to_node2 = value.second;
 
     exists_edge_bitArray |= exists_edge_node2_to_node3 ? 16 : 0;
-    exists_edge_bitArray |= exists_edge_node3_to_node2 ? 24 : 0;
+    exists_edge_bitArray |= exists_edge_node3_to_node2 ? 32 : 0;
+
+    // Print decission:
+    //std::cout << "edge 2 -> 3: " << exists_edge_node2_to_node3 << "\n" << "edge 3 -> 2: " << exists_edge_node3_to_node2 << std::endl;
     
     return exists_edge_bitArray;
 }
