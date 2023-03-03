@@ -15,6 +15,7 @@
 #include "CentralityApprox.h"
 #include "Histogram.h"
 #include "Modularity.h"
+#include "NetworkMotifs.h"
 
 
 void test_algorithm_parallelization(std::filesystem::path input_directory);

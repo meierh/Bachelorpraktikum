@@ -263,3 +263,238 @@ std::vector<long double> NetworkMotifs::compute_network_TripleMotifs
     //throw std::string("751");
     return motifFraction;
 }
+
+
+
+std::vector<long double> NetworkMotifs::compute_network_TripleMotifs_SingleProc
+(
+    const DistributedGraph& graph,
+    unsigned int result_rank
+)
+{
+    const int my_rank = MPIWrapper::get_my_rank();
+    
+    // Prepare structure
+    std::vector<std::uint64_t> motifTypeCount(14, 0);
+
+    if(my_rank == result_rank){
+        int number_ranks = MPIWrapper::get_number_ranks();
+        std::uint64_t number_local_nodes = graph.get_number_local_nodes();
+        auto total_number_nodes = NodeCounter::all_count_nodes(graph);
+
+        // Main rank gathers other ranks number of nodes
+        std::vector<std::uint64_t> number_nodes_of_ranks(number_ranks);
+        MPIWrapper::gather<uint64_t>(&number_local_nodes, number_nodes_of_ranks.data(), 1, MPI_UINT64_T, result_rank);
+
+        for(int current_rank = 0; current_rank < current_rank; current_rank++) {
+            for(std::uint64_t current_node = 0; current_node < number_nodes_of_ranks[current_rank]; current_node++) {
+                
+                std::vector<threeMotifStructure> this_node_motifs_results;
+
+                const std::vector<OutEdge>& oEdges = graph.get_out_edges(my_rank, current_node);
+                const std::vector<InEdge>& iEdges = graph.get_in_edges(my_rank, current_node);
+                
+                std::unordered_map<std::pair<std::uint64_t, std::uint64_t>,  // [rank, node] --> [out, in]
+                                std::pair<bool,bool>,
+                                StdPair_hash> adjacent_nodes;
+                
+                for(const OutEdge& oEdge : oEdges) {
+                    std::pair<std::uint64_t, std::uint64_t> node_key(oEdge.target_rank, oEdge.target_id);
+                    std::pair<bool,bool>& value = adjacent_nodes[node_key];
+                    assert(!value.first);   
+                    value.first = true; //map insert normal
+                }
+                
+                for(const InEdge& iEdge : iEdges) {
+                    std::pair<std::uint64_t,std::uint64_t> node_key(iEdge.source_rank,iEdge.source_id);
+                    std::pair<bool,bool>& value = adjacent_nodes[node_key];
+                    assert(!value.second);
+                    value.second = true; //map insert normal
+                }
+
+                for(auto iterOuter = adjacent_nodes.begin(); iterOuter != adjacent_nodes.end(); iterOuter++) {
+                    std::pair<std::uint64_t,std::uint64_t> node_Outer_key = iterOuter->first;
+                    
+                    for(auto iterInner = adjacent_nodes.begin(); iterInner != adjacent_nodes.end(); iterInner++) {
+                        std::pair<std::uint64_t,std::uint64_t> node_Inner_key = iterInner->first;
+                        
+                        if(node_Inner_key != node_Outer_key) {
+                            //std::tuple<std::uint64_t,std::uint64_t,threeMotifStructure> possible_motif;
+                            threeMotifStructure motifStruc;
+                            motifStruc.node_1_rank = my_rank;
+                            motifStruc.node_1_local = current_node;
+                            motifStruc.node_2_rank = node_Outer_key.first;
+                            motifStruc.node_2_local = node_Outer_key.second;
+                            motifStruc.node_3_rank = node_Inner_key.first;
+                            motifStruc.node_3_local = node_Inner_key.second;
+                            
+                            bool exists_edge_node1_to_node2 = iterOuter->second.first;
+                            bool exists_edge_node2_to_node1 = iterOuter->second.second;
+                            bool exists_edge_node1_to_node3 = iterInner->second.first;
+                            bool exists_edge_node3_to_node1 = iterInner->second.second;
+
+                            std::uint16_t exists_edge_bitArray = 0;
+                            exists_edge_bitArray |= exists_edge_node1_to_node2 ? 1 : 0;
+                            exists_edge_bitArray |= exists_edge_node2_to_node1 ? 2 : 0;
+                            exists_edge_bitArray |= exists_edge_node1_to_node3 ? 4 : 0;
+                            exists_edge_bitArray |= exists_edge_node3_to_node1 ? 8 : 0;
+
+                            switch (exists_edge_bitArray)   // optimisation possible if highest cases are up
+                            {
+                                case 10:
+                                    //three node motif 1 & 11 (0101)
+                                    exists_edge_bitArray = update_edge_bitArray(graph, exists_edge_bitArray, 
+                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);   
+                                    if(exists_edge_bitArray == 10)
+                                        motifStruc.setMotifTypes({1});
+                                    else if(exists_edge_bitArray == 50)
+                                        motifStruc.setMotifTypes({11});
+                                    break;
+                                case 5:
+                                    //three node motif 3 & 8 (1010)
+                                    exists_edge_bitArray = update_edge_bitArray(graph, exists_edge_bitArray, 
+                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);
+                                    if(exists_edge_bitArray == 5)
+                                        motifStruc.setMotifTypes({3});
+                                    else if(exists_edge_bitArray == 45)
+                                        motifStruc.setMotifTypes({8});
+                                    break;
+                                
+                                case 6:
+                                case 9:
+                                    //three node motif 2 & 5 & 7 & 10 (0110, 1001)
+                                    exists_edge_bitArray = update_edge_bitArray(graph, exists_edge_bitArray, 
+                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);
+                                    if(exists_edge_bitArray == 6 || exists_edge_bitArray == 9)
+                                        motifStruc.setMotifTypes({2});
+                                    else if(exists_edge_bitArray == 22 || exists_edge_bitArray == 33)
+                                        motifStruc.setMotifTypes({5});
+                                    else if(exists_edge_bitArray == 30 || exists_edge_bitArray == 25)
+                                        motifStruc.setMotifTypes({7});
+                                    else if(exists_edge_bitArray == 46 || exists_edge_bitArray == 49)
+                                        motifStruc.setMotifTypes({10});
+                                    else
+                                        assert(false);
+                                    break;
+                                
+                                case 14:
+                                case 11:
+                                    //three node motif 4 (0111, 1101)
+                                    exists_edge_bitArray = update_edge_bitArray(graph, exists_edge_bitArray, 
+                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);
+                                    if(exists_edge_bitArray == 14 || exists_edge_bitArray == 11)
+                                        motifStruc.setMotifTypes({4});
+                                    break;
+                                
+                                case 7:
+                                case 13:
+                                    //three node motif 6 (1110, 1011)
+                                    exists_edge_bitArray = update_edge_bitArray(graph, exists_edge_bitArray, 
+                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);
+                                    if(exists_edge_bitArray == 7 || exists_edge_bitArray == 13)
+                                        motifStruc.setMotifTypes({6});
+                                    break;
+                                
+                                case 15:
+                                    //three node motif 9 & 12 & 13 (1111)
+                                    exists_edge_bitArray = update_edge_bitArray(graph, exists_edge_bitArray, 
+                                        motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);
+                                    if(exists_edge_bitArray == 15)
+                                        motifStruc.setMotifTypes({9});
+                                    else if(exists_edge_bitArray == 31 || exists_edge_bitArray == 39)
+                                        motifStruc.setMotifTypes({12});
+                                    else if(exists_edge_bitArray == 55)
+                                        motifStruc.setMotifTypes({13});
+                                    else
+                                        assert(false);
+                                    break;
+                                default:
+                                    break;
+                            }
+                            
+                            //auto current_motif = std::tie<std::uint64_t, std::uint64_t, threeMotifStructure>
+                                                            (node_Outer_key.first, node_Outer_key.second, motifStruc);
+                            assert(motifStruc.checkValidity());
+                            
+                            // Count every motiv
+                            for(int motifType = 1; motifType < 14; motifType++) {
+                                if(motifStruc.isMotifTypeSet(motifType))
+                                    motifTypeCount[motifType]++;
+                            }
+                        }
+                    }
+                }
+            }
+            std::cout << "Scanning nodes of rank " << current_rank << " (" << number_ranks << ") " << " ..." << std::endl;
+        }
+        //Rotational invariant motifs where counted three times each
+        assert(motifTypeCount[7]%3 == 0);
+        motifTypeCount[7] /= 3;
+        assert(motifTypeCount[13]%3 == 0);
+        motifTypeCount[13] /= 3;      
+    }
+    
+    std::vector<long double> motifFraction;
+    if(my_rank == result_rank) {
+        std::uint64_t total_number_of_motifs = std::accumulate(motifTypeCount.begin(),motifTypeCount.end(), 0);
+        motifFraction.resize(motifTypeCount.size());
+        motifFraction[0] = total_number_of_motifs;
+
+        for(int motifType = 1; motifType < 14; motifType++) {
+            motifFraction[motifType] = motifTypeCount[motifType];
+            //motifFraction[motifType] = static_cast<long double>(motifTypeCountTotal[motifType]) / static_cast<long double>(total_number_of_motifs);
+        }
+
+        // Print NetworkMotifs:
+        for (size_t i = 0; i < motifFraction.size(); i++) {
+            std::cout << "motifFraction[" << i << "] = " << motifFraction[i] << std::endl;
+        }
+    }
+
+    MPIWrapper::barrier();
+    return motifFraction;
+}
+
+std::uint16_t NetworkMotifs::update_edge_bitArray
+(
+    const DistributedGraph& graph,
+    std::uint16_t exists_edge_bitArray,
+    unsigned int node_2_rank, 
+    std::uint64_t node_2_local, 
+    unsigned int node_3_rank, 
+    std::uint64_t node_3_local
+)
+{
+    const std::vector<OutEdge>& oEdges = graph.get_out_edges(node_2_rank, node_2_local);
+    const std::vector<InEdge>& iEdges = graph.get_in_edges(node_2_rank, node_2_local);
+    
+    std::unordered_map<std::pair<std::uint64_t, std::uint64_t>,
+                    std::pair<bool, bool>,
+                    StdPair_hash> adjacent_nodes;
+    
+    for(const OutEdge& oEdge : oEdges)
+    {
+        std::pair<std::uint64_t, std::uint64_t> node_key(oEdge.target_rank, oEdge.target_id);
+        std::pair<bool, bool>& value = adjacent_nodes[node_key];
+        assert(!value.first);
+        value.first = true;
+    }
+    for(const InEdge& iEdge : iEdges)
+    {
+        std::pair<std::uint64_t, std::uint64_t> node_key(iEdge.source_rank, iEdge.source_id);
+        std::pair<bool,bool>& value = adjacent_nodes[node_key];
+        assert(!value.second);
+        value.second = true;
+    }
+    
+    std::pair<std::uint64_t, std::uint64_t> node_3_key(node_3_rank, node_3_local);
+    std::pair<bool, bool>& value = adjacent_nodes[node_3_key];
+    
+    bool exists_edge_node2_to_node3 = value.first;
+    bool exists_edge_node3_to_node2 = value.second;
+
+    exists_edge_bitArray |= exists_edge_node2_to_node3 ? 16 : 0;
+    exists_edge_bitArray |= exists_edge_node3_to_node2 ? 24 : 0;
+    
+    return exists_edge_bitArray;
+}

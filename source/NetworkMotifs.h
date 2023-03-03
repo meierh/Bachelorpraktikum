@@ -3,6 +3,7 @@
 #include "DistributedGraph.h"
 #include "MPIWrapper.h"
 #include "CommunicationPatterns.h"
+#include "NodeCounter.h"
 #include <unordered_map>
 #include <unordered_set>
 #include <functional>
@@ -24,6 +25,13 @@ public:
         unsigned int resultToRank = 0
     );
     /*-------------------------NetworkMotifs----------------------------------|||*/
+
+    static std::vector<long double> compute_network_TripleMotifs_SingleProc
+    (
+    const DistributedGraph& graph,
+    unsigned int my_rank = 0
+    );
+
 private:
     struct StdPair_hash
     {
@@ -105,4 +113,14 @@ private:
             return res;
         }
     } threeMotifStructure;
+
+    static std::uint16_t update_edge_bitArray
+    (
+        const DistributedGraph& graph,
+        std::uint16_t exists_edge_bitArray,
+        unsigned int node_2_rank, 
+        std::uint64_t node_2_local, 
+        unsigned int node_3_rank, 
+        std::uint64_t node_3_local
+    );
 };

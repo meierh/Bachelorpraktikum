@@ -63,7 +63,9 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 	double modularity_par, modularity_seq;
 	try {
 		modularity_par = Modularity::compute_modularity(dg);
-		modularity_seq = Modularity::compute_modularity_sequential(dg); // modularity_par;
+		MPIWrapper::barrier();
+		modularity_seq = Modularity::compute_modularity_sequential(dg);
+		MPIWrapper::barrier();
 		double absolute_error = std::abs(modularity_par - modularity_seq);
 		double relative_error = absolute_error / 0.5 * (modularity_par + modularity_seq);
 		if (relative_error > 1e-8) {
@@ -76,6 +78,21 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 		test_result = "Modularity test completed";
 	} catch (std::string error_code) {
 		test_result = "Modularity Error :" + error_code;
+	}
+	if (my_rank == 0)
+		std::cout << test_result << std::endl;
+
+	// Test NetworkMotifs algorithm parallelization
+	std::vector<long double> motifs_par, motifs_seq;
+	try {
+		//motifs_par = NetworkMotifs::compute_network_TripleMotifs(dg);
+		MPIWrapper::barrier();
+		motifs_seq = NetworkMotifs::compute_network_TripleMotifs_SingleProc(dg);
+		MPIWrapper::barrier();
+
+		test_result = "NetworkMotifs test completed";
+	} catch (std::string error_code) {
+		test_result = "NetworkMotifs Error :" + error_code;
 	}
 	if (my_rank == 0)
 		std::cout << test_result << std::endl;
