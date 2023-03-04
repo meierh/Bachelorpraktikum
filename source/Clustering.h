@@ -46,7 +46,7 @@ class Clustering {
 	}
 
 public:
-	static double compuate_average_clustering_coefficient(const DistributedGraph& graph) {
+	static double compute_average_clustering_coefficient(const DistributedGraph& graph) {
 		const auto my_rank = MPIWrapper::get_my_rank();
 
 		const auto number_local_nodes = graph.get_number_local_nodes();

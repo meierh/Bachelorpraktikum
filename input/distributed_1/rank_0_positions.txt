@@ -1,0 +1,4 @@
+# ID	Position (x y z)	Area	type
+1	19.37056 54.46747 63.90031	gross.hirn	ex
+2       32.46233 48.37762 54.00322      gross.hirn      ex
+3       17.11223 33.58521 56.35628      klein.hirn      ex

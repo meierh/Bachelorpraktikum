@@ -13,7 +13,6 @@
 #include <iostream>
 
 #include "Edge.h"
-//#include "GraphProperty.h"
 
 inline int do_nothing(void*) {
 	return 0;
@@ -25,13 +24,18 @@ struct RMAWindow {
 	std::uint64_t size{};
 	std::vector<T*> base_pointers{};
 	T* my_base_pointer{};
+	// Lock status is assumed to be globally synchronized all the time.
+	// DO NOT CHANGE IT ON LESS THAN ALL RANKS!
+	bool window_locked_globally;
 
-	RMAWindow() {}
+	RMAWindow():window_locked_globally(false) {}
 
-	RMAWindow(T* ptr) : my_base_pointer(ptr) {
-
+	RMAWindow(T* ptr) : my_base_pointer(ptr),window_locked_globally(false) {
 	}
 
+	void set_locked_globally(){window_locked_globally=true;}
+	void set_unlocked_globally(){window_locked_globally=false;}
+	
 	RMAWindow(const RMAWindow& other) = default;
 	RMAWindow(RMAWindow&& other) = default;
 
@@ -432,7 +436,9 @@ public:
 	 */
 	template<typename T>
 	static void passive_sync_rma_get(T *dest_addr, int count, int src_disp, int src_rank, MPI_Datatype datatype, const RMAWindow<T>& rma_window) {
-		lock_window_shared(src_rank,rma_window.window);
+		if(!rma_window.window_locked_globally){
+			lock_window_shared(src_rank,rma_window.window);
+		}
 		if(src_rank == my_rank) {	
 			const T* const src_base_ptr = rma_window.my_base_pointer;
 			const T* src_ptr = src_base_ptr+src_disp;
@@ -448,6 +454,8 @@ public:
 			}
 			MPI_Wait(&request_item, MPI_STATUS_IGNORE);
 		}
-		unlock_window(src_rank,rma_window.window);
+		if(!rma_window.window_locked_globally){
+			unlock_window(src_rank,rma_window.window);
+		}
 	}
 };

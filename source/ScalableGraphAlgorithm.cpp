@@ -46,11 +46,11 @@ void calculate_metrics(std::filesystem::path input_directory) {
 
 	const auto average_edge_length = EdgeLength::compute_edge_length(dg);
 
-	//const auto [average_shortest_path, global_efficiency, number_unreachables] = AllPairsShortestPath::compute_apsp(dg);
+	const auto [average_shortest_path, global_efficiency, number_unreachables] = AllPairsShortestPath::compute_apsp(dg);
 
-	//const auto average_betweenness_centrality = BetweennessCentrality::compute_average_betweenness_centrality(dg);
+	const auto average_betweenness_centrality = BetweennessCentrality::compute_average_betweenness_centrality(dg);
 
-	const auto average_cluster_coefficient = Clustering::compuate_average_clustering_coefficient(dg);
+	const auto average_cluster_coefficient = Clustering::compute_average_clustering_coefficient(dg);
 
 	if (my_rank == 0) {
 		std::cout << "The total number of nodes in the graph is: " << number_total_nodes << '\n';
@@ -59,10 +59,10 @@ void calculate_metrics(std::filesystem::path input_directory) {
 		std::cout << "The minimum in-degree is " << min_in << " and the maximum in-degree is " << max_in << '\n';
 		std::cout << "The minimum out-degree is " << min_out << " and the maximum out-degree is " << max_out << '\n';
 		std::cout << "The average edge length is " << average_edge_length << '\n';
-		//std::cout << "The average shortest path is " << average_shortest_path << ", however, " << number_unreachables << " pairs had no path.\n";
-		//std::cout << "The global efficiency is " << global_efficiency << ", however, " << number_unreachables << " pairs had no path.\n";
+		std::cout << "The average shortest path is " << average_shortest_path << ", however, " << number_unreachables << " pairs had no path.\n";
+		std::cout << "The global efficiency is " << global_efficiency << ", however, " << number_unreachables << " pairs had no path.\n";
 		std::cout << "The average clustering coefficient is: " << average_cluster_coefficient << '\n';
-		//std::cout << "The average betweenness centrality is: " << average_betweenness_centrality << '\n';
+		std::cout << "The average betweenness centrality is: " << average_betweenness_centrality << '\n';
 		fflush(stdout);
 	}
 }
@@ -79,6 +79,7 @@ int main(int argument_count, char* arguments[]) {
 	MPIWrapper::init(argument_count, arguments);
 
 	test_algorithm_parallelization(input_directory);
+	//test_centrality_approx(input_directory);
 
 	MPIWrapper::finalize();
 

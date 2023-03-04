@@ -4,13 +4,13 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <map>
+#include <unordered_map>
 #include <vector>
 
 template<typename EdgeType>
 class EdgeCache {
 
-	std::vector<std::map<int, std::vector<EdgeType>>> cache{};
+	std::vector<std::unordered_map<int, std::vector<EdgeType>>> cache{};
 
 public:
 	void init() {
