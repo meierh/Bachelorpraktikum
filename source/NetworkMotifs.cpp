@@ -238,7 +238,7 @@ std::vector<long double> NetworkMotifs::compute_network_TripleMotifs
     
     if(my_rank==resultToRank)
     {
-        //Rotational invariant motifs where counted three times each
+        //Rotational invariant motifs were counted three times each
         if(motifTypeCount[7]%3 != 0) std::cout << "error: motifTypeCount[7]%3 != 0 ==> " << motifTypeCount[7] << std::endl; 
         motifTypeCountTotal[7]/=3;
         if(motifTypeCount[13]%3 != 0) std::cout << "error: motifTypeCount[13]%3 != 0 ==> " << motifTypeCount[13] << std::endl; 
