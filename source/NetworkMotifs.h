@@ -19,14 +19,14 @@ public:
      * graph:           A DistributedGraph (Function is MPI compliant)
      * 
      */
-    static std::vector<long double> compute_network_TripleMotifs
+    static std::array<long double,14> compute_network_TripleMotifs
     (
         const DistributedGraph& graph,
         unsigned int resultToRank = 0
     );
     /*-------------------------NetworkMotifs----------------------------------|||*/
 
-    static std::vector<long double> compute_network_TripleMotifs_SingleProc
+    static std::array<long double,14> compute_network_TripleMotifs_SingleProc
     (
     const DistributedGraph& graph,
     unsigned int my_rank = 0

@@ -75,22 +75,25 @@ void test_networkMotifs(std::filesystem::path input_directory) {
 	
 	// Test NetworkMotifs algorithm parallelization
 	std::string test_result;
-	std::vector<long double> motifs_par, motifs_seq;
+	std::array<long double,14> motifs_par, motifs_seq;
 	try {
 		motifs_par = NetworkMotifs::compute_network_TripleMotifs(dg);
 		MPIWrapper::barrier();
 		motifs_seq = NetworkMotifs::compute_network_TripleMotifs_SingleProc(dg);
 		MPIWrapper::barrier();
 		
-		std::cout<<"par:";
-		for(long double m : motifs_par)
-			std::cout<<m<<" , ";
-		std::cout<<std::endl;
+		if(my_rank==0)
+		{
+			std::cout<<"par:";
+			for(long double m : motifs_par)
+				std::cout<<m<<"|";
+			std::cout<<std::endl;
 
-		std::cout<<"seq:";
-		for(long double m : motifs_seq)
-			std::cout<<m<<" , ";
-		std::cout<<std::endl;
+			std::cout<<"seq:";
+			for(long double m : motifs_seq)
+				std::cout<<m<<"|";
+			std::cout<<std::endl;
+		}
 
 		test_result = "NetworkMotifs test completed";
 	} catch (std::string error_code) {

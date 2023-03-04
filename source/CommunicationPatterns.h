@@ -54,7 +54,6 @@ public:
             questioner_structure->addQuestionsFromOneNodeToSend(generateAddressees(graph,node_local_ind),node_local_ind);
         }
         questioner_structure->finalizeAddingQuestionsToSend();
-    if(my_rank==0) std::cout<<"Collect Questions done"<<std::endl;
 	//SCOREP_USER_REGION_END(global_handle)        
                 
     // Distribute number of questions to each rank
@@ -69,7 +68,6 @@ public:
         }
         MPIWrapper::all_gatherv<int>(send_ranks_to_nbrOfQuestions.data(), number_ranks,
                                     global_ranks_to_nbrOfQuestions.data(), destCounts_ranks_to_nbrOfQuestions.data(), displ_ranks_to_nbrOfQuestions.data(), MPI_INT);
-    if(my_rank==0) std::cout<<"Distribute Question number done"<<std::endl;
 	//SCOREP_USER_REGION_END(global_handle)
         
     // Distribute questions to each rank
@@ -106,7 +104,6 @@ public:
                                             my_rank_total_question_parameters.data(),
                                             recv_ranks_to_nbrOfQuestions.data(), displ_recv_ranks_to_nbrOfQuestions.data(),MPI_Q_parameter,rank);
         }
-    if(my_rank==0) std::cout<<"Distribute Questions done"<<std::endl;
 	//SCOREP_USER_REGION_END(global_handle)
 
     // Set questions to be answered to adressees questioner structure
@@ -117,7 +114,6 @@ public:
     // Compute the answers to questions
 	//SCOREP_USER_REGION_BEGIN(global_handle, "ComputeAnswers",SCOREP_USER_REGION_TYPE_PHASE)
         adressee_structure.computeAnswersToQuestions(graph,generateAnswers);
-    if(my_rank==0) std::cout<<"Compute Answers done"<<std::endl;
 	//SCOREP_USER_REGION_END(global_handle)
 
         
@@ -145,14 +141,12 @@ public:
                                             my_rank_total_answer_parameters.data(),
                                             send_ranks_to_nbrOfAnswers.data(), displ_send_ranks_to_nbrOfAnswers.data(),MPI_A_parameter,rank);
         }
-    if(my_rank==0) std::cout<<"Send back Answers done"<<std::endl;
 	//SCOREP_USER_REGION_END(global_handle)
         
     // Set answers questioner structure
 	//SCOREP_USER_REGION_BEGIN(global_handle, "SetAnswers",SCOREP_USER_REGION_TYPE_PHASE)
         questioner_structure->setAnswers(my_rank_total_answer_parameters,send_ranks_to_nbrOfAnswers,
                                         displ_send_ranks_to_nbrOfAnswers);
-    if(my_rank==0) std::cout<<"Set Answers done"<<std::endl;
 	//SCOREP_USER_REGION_END(global_handle)
         
         return std::move(questioner_structure);
@@ -370,9 +364,10 @@ public:
             std::uint64_t questioner
         )
         {
+            auto& ref_list_of_adressees_and_parameter = *list_of_adressees_and_parameter;
             assert(structureStatus==Empty || structureStatus==PrepareQuestionsToSend);
             
-            for(auto [target_rank,target_local_node,Q_parameter_struct] : *list_of_adressees_and_parameter)
+            for(auto [target_rank,target_local_node,Q_parameter_struct] : ref_list_of_adressees_and_parameter)
             {
                 assert(target_rank<MPIWrapper::get_number_ranks());
                 const auto rank_to_index = rank_to_outerIndex.find(target_rank);
@@ -419,6 +414,7 @@ public:
                 }
             }
             
+            /*
             for(auto keyValue = questioner_node_to_outerIndex_and_innerIndex.begin();
                 keyValue!=questioner_node_to_outerIndex_and_innerIndex.end();
                 keyValue++)
@@ -436,6 +432,7 @@ public:
                 assert(questioner==nodes_that_ask_the_question[outerIndex][innerIndex]);
                 assert(innerIndex<question_parameters[outerIndex].size());
             }
+            */
             structureStatus = PrepareQuestionsToSend;
         };
         void finalizeAddingQuestionsToSend()
