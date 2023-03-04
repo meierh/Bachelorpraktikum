@@ -118,9 +118,9 @@ public:
 		return signal_types;
 	}	
 
-	void lock_all_rma_windows() const;
+	void lock_all_rma_windows();
 
-	void unlock_all_rma_windows() const;
+	void unlock_all_rma_windows();
 
 private:
 	void load_nodes(const std::filesystem::path& path);

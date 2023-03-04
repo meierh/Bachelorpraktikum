@@ -45,24 +45,118 @@ DistributedGraph::DistributedGraph(const std::filesystem::path& path) {
 	out_edge_cache.init();
 }
 
-void DistributedGraph::lock_all_rma_windows() const {
+void DistributedGraph::lock_all_rma_windows(){
 	const auto error_1 = MPI_Win_lock_all(0, nodes_window.window);
+	if(error_1 != MPI_SUCCESS) {
+		std::cout << "Locking all nodes_window RMA windows returned the error: " << error_1 << std::endl;
+		throw error_1;
+	}
+	nodes_window.window_locked_globally=true;
 	const auto error_2 = MPI_Win_lock_all(0, in_edges_window.window);
+	if(error_2 != MPI_SUCCESS) {
+		std::cout << "Locking all in_edges_window RMA windows returned the error: " << error_2 << std::endl;
+		throw error_2;
+	}
+	in_edges_window.window_locked_globally=true;
 	const auto error_3 = MPI_Win_lock_all(0, prefix_in_edges_window.window);
+	if(error_3 != MPI_SUCCESS) {
+		std::cout << "Locking all prefix_in_edges_window RMA windows returned the error: " << error_3 << std::endl;
+		throw error_3;
+	}
+	prefix_in_edges_window.window_locked_globally=true;
 	const auto error_4 = MPI_Win_lock_all(0, number_in_edges_window.window);
+	if(error_4 != MPI_SUCCESS) {
+		std::cout << "Locking all number_in_edges_window RMA windows returned the error: " << error_4 << std::endl;
+		throw error_4;
+	}
+	number_in_edges_window.window_locked_globally=true;
 	const auto error_5 = MPI_Win_lock_all(0, out_edges_window.window);
+	if(error_5 != MPI_SUCCESS) {
+		std::cout << "Locking all out_edges_window RMA windows returned the error: " << error_5 << std::endl;
+		throw error_5;
+	}
+	out_edges_window.window_locked_globally=true;
 	const auto error_6 = MPI_Win_lock_all(0, prefix_out_edges_window.window);
+	if(error_6 != MPI_SUCCESS) {
+		std::cout << "Locking all prefix_out_edges_window RMA windows returned the error: " << error_6 << std::endl;
+		throw error_6;
+	}
+	prefix_out_edges_window.window_locked_globally=true;
 	const auto error_7 = MPI_Win_lock_all(0, number_out_edges_window.window);
+	if(error_7 != MPI_SUCCESS) {
+		std::cout << "Locking all nodes_window RMA windows returned the error: " << error_7 << std::endl;
+		throw error_7;
+	}
+	number_out_edges_window.window_locked_globally=true;
+	const auto error_8 = MPI_Win_lock_all(0, area_names_ind_window.window);
+	if(error_8 != MPI_SUCCESS) {
+		std::cout << "Locking all area_names_ind_window RMA windows returned the error: " << error_8 << std::endl;
+		throw error_8;
+	}
+	area_names_ind_window.window_locked_globally=true;
+	const auto error_9 = MPI_Win_lock_all(0, signal_types_ind_window.window);
+	if(error_9 != MPI_SUCCESS) {
+		std::cout << "Locking all signal_types_ind_window RMA windows returned the error: " << error_9 << std::endl;
+		throw error_9;
+	}
+	signal_types_ind_window.window_locked_globally=true;
 }
 
-void DistributedGraph::unlock_all_rma_windows() const {
+void DistributedGraph::unlock_all_rma_windows(){
 	const auto error_1 = MPI_Win_unlock_all(nodes_window.window);
+	if(error_1 != MPI_SUCCESS) {
+		std::cout << "Unlocking all nodes_window RMA windows returned the error: " << error_1 << std::endl;
+		throw error_1;
+	}
+	nodes_window.window_locked_globally=false;
 	const auto error_2 = MPI_Win_unlock_all(in_edges_window.window);
+	if(error_2 != MPI_SUCCESS) {
+		std::cout << "Unlocking all in_edges_window RMA windows returned the error: " << error_2 << std::endl;
+		throw error_2;
+	}
+	in_edges_window.window_locked_globally=false;
 	const auto error_3 = MPI_Win_unlock_all(prefix_in_edges_window.window);
+	if(error_3 != MPI_SUCCESS) {
+		std::cout << "Unlocking all prefix_in_edges_window RMA windows returned the error: " << error_3 << std::endl;
+		throw error_3;
+	}
+	prefix_in_edges_window.window_locked_globally=false;
 	const auto error_4 = MPI_Win_unlock_all(number_in_edges_window.window);
+	if(error_4 != MPI_SUCCESS) {
+		std::cout << "Unlocking all number_in_edges_window RMA windows returned the error: " << error_4 << std::endl;
+		throw error_4;
+	}
+	number_in_edges_window.window_locked_globally=false;
 	const auto error_5 = MPI_Win_unlock_all(out_edges_window.window);
+	if(error_5 != MPI_SUCCESS) {
+		std::cout << "Unlocking all out_edges_window RMA windows returned the error: " << error_5 << std::endl;
+		throw error_5;
+	}
+	out_edges_window.window_locked_globally=false;
 	const auto error_6 = MPI_Win_unlock_all(prefix_out_edges_window.window);
+	if(error_6 != MPI_SUCCESS) {
+		std::cout << "Unlocking all nodes_window RMA windows returned the error: " << error_6 << std::endl;
+		throw error_6;
+	}
+	prefix_out_edges_window.window_locked_globally=false;
 	const auto error_7 = MPI_Win_unlock_all(number_out_edges_window.window);
+	if(error_7 != MPI_SUCCESS) {
+		std::cout << "Unlocking all number_out_edges_window RMA windows returned the error: " << error_7 << std::endl;
+		throw error_7;
+	}
+	number_out_edges_window.window_locked_globally=false;
+	const auto error_8 = MPI_Win_unlock_all(area_names_ind_window.window);
+	if(error_8 != MPI_SUCCESS) {
+		std::cout << "Unlocking all area_names_ind_window RMA windows returned the error: " << error_8 << std::endl;
+		throw error_8;
+	}
+	area_names_ind_window.window_locked_globally=false;
+	const auto error_9 = MPI_Win_unlock_all(signal_types_ind_window.window);
+	if(error_9 != MPI_SUCCESS) {
+		std::cout << "Unlocking all signal_types_ind_window RMA windows returned the error: " << error_9 << std::endl;
+		throw error_9;
+	}
+	signal_types_ind_window.window_locked_globally=false;
 }
 
 void DistributedGraph::load_nodes(const std::filesystem::path& path) {

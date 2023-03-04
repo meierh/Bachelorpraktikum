@@ -10,7 +10,7 @@
 #include <vector>
 
 class EdgeLength {
-	static double compute_edge_length(const DistributedGraph& graph, const int node_id) {
+	static double compute_edge_length(DistributedGraph& graph, const int node_id) {
 		const auto my_rank = MPIWrapper::get_my_rank();
 	
 		auto accumulated_distance = 0.0;
@@ -30,7 +30,7 @@ class EdgeLength {
 	}
 
 public:
-	static double compute_edge_length(const DistributedGraph& graph) {
+	static double compute_edge_length(DistributedGraph& graph) {
 		const auto number_local_nodes = graph.get_number_local_nodes();
 
 		auto accumulated_distance = 0.0;
@@ -57,7 +57,7 @@ public:
 		return average_distance;
 	}
 
-	static double all_compute_edge_length(const DistributedGraph& graph) {
+	static double all_compute_edge_length(DistributedGraph& graph) {
 		const auto number_local_nodes = graph.get_number_local_nodes();
 
 		auto accumulated_distance = 0.0;
