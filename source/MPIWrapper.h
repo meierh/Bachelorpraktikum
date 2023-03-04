@@ -361,7 +361,8 @@ public:
 	
 	template<typename T>
 	static void all_reduce(T* src, T* dest,int count,MPI_Datatype datatype,MPI_Op op) {
-		if (const auto error_code = MPI_Allreduce(src,dest,count,datatype,op,MPI_COMM_WORLD); error_code != 0) {
+		const int error_code = MPI_Allreduce(src,dest,count,datatype,op,MPI_COMM_WORLD);
+		if ( error_code != 0) {
 			std::cout << "All-reducing all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -369,7 +370,8 @@ public:
 	
 	template<typename T>
 	static void reduce(T* src, T* dest,int count,MPI_Datatype datatype,MPI_Op op,int root) {
-		if (const auto error_code = MPI_Reduce(src,dest,count,datatype,op,root,MPI_COMM_WORLD); error_code != 0) {
+		const int error_code = MPI_Reduce(src,dest,count,datatype,op,root,MPI_COMM_WORLD);
+		if ( error_code != 0) {
 			std::cout << "All-reducing all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -377,7 +379,8 @@ public:
 	
 	template<typename T>
 	static void gather(T* src, T* dest, int count, MPI_Datatype datatype,int root){
-		if (const auto error_code= MPI_Gather(src,count,datatype,dest,count,datatype,root,MPI_COMM_WORLD);	error_code != 0) {
+		const int error_code= MPI_Gather(src,count,datatype,dest,count,datatype,root,MPI_COMM_WORLD);
+		if (error_code != 0) {
 			std::cout << "Gathering all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -385,7 +388,8 @@ public:
 	
 	template<typename T>
 	static void all_gather(T* src, T* dest, int count, MPI_Datatype datatype){
-		if (const auto error_code= MPI_Allgather(src,count,datatype,dest,count,datatype,MPI_COMM_WORLD);	error_code != 0) {
+		const int error_code= MPI_Allgather(src,count,datatype,dest,count,datatype,MPI_COMM_WORLD);
+		if (error_code != 0) {
 			std::cout << "All_Gathering all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -393,7 +397,8 @@ public:
 	
 	template<typename T>
 	static void gatherv(T* src, int count, T* dest, int* destCounts, int* displs, MPI_Datatype datatype,int root){
-		if (const auto error_code= MPI_Gatherv(src,count,datatype,dest,destCounts,displs,datatype,root,MPI_COMM_WORLD);	error_code != 0) {
+		const int error_code= MPI_Gatherv(src,count,datatype,dest,destCounts,displs,datatype,root,MPI_COMM_WORLD);
+		if (error_code != 0) {
 			std::cout << "Gatherving all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -401,7 +406,8 @@ public:
 	
 	template<typename T>
 	static void all_gatherv(T* src, int count, T* dest, int* destCounts, int* displs, MPI_Datatype datatype){
-		if (const auto error_code= MPI_Allgatherv(src,count,datatype,dest,destCounts,displs,datatype,MPI_COMM_WORLD);	error_code != 0) {
+		const int error_code= MPI_Allgatherv(src,count,datatype,dest,destCounts,displs,datatype,MPI_COMM_WORLD);
+		if (error_code != 0) {
 			std::cout << "All_Gatherving all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -443,48 +449,5 @@ public:
 			MPI_Wait(&request_item, MPI_STATUS_IGNORE);
 		}
 		unlock_window(src_rank,rma_window.window);
-	}
-
-	static void Irecv(void* buffer,int count,MPI_Datatype datatype,int source,int tag,MPI_Request *request){
-		if(const int error_code = MPI_Irecv(buffer,count,datatype,source,tag,MPI_COMM_WORLD,request); error_code != 0){
-			std::cout << "Irecv returned the error: " << error_code << std::endl;
-			throw error_code;
-		}
-	}
-	
-	static void Isend(void* buffer,int count,MPI_Datatype datatype,int dest,int tag,MPI_Request *request){
-		if(const int error_code = MPI_Isend(buffer,count,datatype,dest,tag,MPI_COMM_WORLD,request); error_code != 0){
-			std::cout << "Isend returned the error: " << error_code << std::endl;
-			throw error_code;
-		}
-	}
-	
-	static void Waitall(int count, MPI_Request array_of_requests[]){
-		MPI_Status array_of_statuses[count];
-		if(const int error_code = MPI_Waitall(count,array_of_requests,array_of_statuses); error_code != 0){
-			std::cout << "Waitall returned the error: " << error_code << std::endl;
-			/*
-			for(int i=0; i<count; i++){
-				std::cout <<"Source "<<array_of_statuses[i].MPI_SOURCE <<" returned the error: " << error_code <<" in Waitall with Tag value "<<array_of_statuses[i].MPI_TAG<< std::endl;
-			}
-			*/
-			throw error_code;
-		}
-	}
-
-	static void Recv(void* buffer,int count,MPI_Datatype datatype,int source,int tag){
-		MPI_Status* status;
-		if(const int error_code = MPI_Recv(buffer,count,datatype,source,tag,MPI_COMM_WORLD,status); error_code != 0){
-			std::cout << "Recv returned the error: " << error_code << std::endl;
-			std::cout << "Source "<<status->MPI_SOURCE<<" returned the error: " << status->MPI_ERROR << std::endl;
-			throw error_code;
-		}
-	}
-	
-	static void Send(void* buffer,int count,MPI_Datatype datatype,int dest,int tag){
-		if(const int error_code = MPI_Send(buffer,count,datatype,dest,tag,MPI_COMM_WORLD); error_code != 0){
-			std::cout << "Send returned the error: " << error_code << std::endl;
-			throw error_code;
-		}
 	}
 };
