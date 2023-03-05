@@ -14,10 +14,15 @@ Histogram::compute_edge_length_histogram_const_bin_width(DistributedGraph& graph
 	std::function<std::unique_ptr<HistogramData>(const double, const double)> bin_width_histogram_creator =
 	    [=](const double min_length, const double max_length) {
 		    double span_length = max_length - min_length;
+			/*
 		    if (span_length <= 0) {
 			    throw std::invalid_argument("Span of edge distribution must be larger than zero!");
 		    }
+		    */
 		    unsigned int number_bins = std::ceil(span_length / bin_width);
+			if(span_length==0) {
+				number_bins = 1;
+			}
 		    if (number_bins < 1) {
 			    throw std::invalid_argument("Number of bins must be greater than zero");
 		    }
@@ -60,11 +65,15 @@ Histogram::compute_edge_length_histogram_const_bin_count(DistributedGraph& graph
 	std::function<std::unique_ptr<HistogramData>(const double, const double)> bin_count_histogram_creator =
 	    [=](const double min_length, const double max_length) {
 		    double span_length = max_length - min_length;
+			/*
 		    if (span_length <= 0) {
 			    throw std::invalid_argument("Span of edge distribution must be larger than zero!");
 		    }
+		    */
 		    double bin_width = span_length / bin_count;
-
+			if(span_length==0) {
+				bin_width = std::numeric_limits<double>::epsilon();
+			}
 		    // Small increment to avoid comparison errors
 		    bin_width = std::nextafter(bin_width, bin_width + 1);
 		    // Small decrement to avoid comparison errors
@@ -93,11 +102,19 @@ Histogram::compute_edge_length_histogram_const_bin_width_sequential(const Distri
 	    [=](double min_length, double max_length) {
 		    double span_length = max_length - min_length;
 		    unsigned int number_bins = std::ceil(span_length / bin_width);
+			if(span_length==0) {
+				number_bins = 1;
+			}
 		    if (number_bins < 1)
 			    throw std::invalid_argument("Number of bins must be greater than zero");
 		    double two_side_overlap_mult = span_length / bin_width - std::floor(span_length / bin_width);
 		    double one_side_overlap = (two_side_overlap_mult / 2) * bin_width;
 		    double start_length = min_length - one_side_overlap;
+			
+		    // Small decrement to avoid comparison errors
+		    start_length = std::nextafter(start_length, start_length - 1);
+		    // Small increment to avoid comparison errors
+		    double bin_width_ext = std::nextafter(bin_width, bin_width + 1);
 
 		    auto histogram = std::make_unique<HistogramData>(number_bins);
 		    for (int i = 0; i < number_bins; i++) {
@@ -123,10 +140,15 @@ Histogram::compute_edge_length_histogram_const_bin_count_sequential(const Distri
 	std::function<std::unique_ptr<HistogramData>(double, double)> bin_count_histogram_creator =
 	    [=](double min_length, double max_length) {
 		    double span_length = max_length - min_length;
+			/*
 		    if (span_length <= 0) {
 			    throw std::invalid_argument("Span of edge distribution must be larger than zero!");
 		    }
+		    */
 		    double bin_width = span_length / bin_count;
+			if(span_length==0) {
+				bin_width = std::numeric_limits<double>::epsilon();
+			}
 		    double start_length = min_length;
 
 		    auto histogram = std::make_unique<HistogramData>(bin_count);

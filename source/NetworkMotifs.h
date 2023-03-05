@@ -52,66 +52,13 @@ private:
         std::uint64_t node_3_local;
         std::uint64_t motifTypeBitArray=0;
         
-        void setMotifTypes(std::vector<int> motifTypes)
-        {
-            for(int motifType : motifTypes)
-            {
-                assert(motifType>=1 && motifType<14);
-                motifTypeBitArray |= (1<<motifType);
-            }
-        }
-        void unsetMotifTypes(std::vector<int> motifTypes)
-        {
-            for(int motifType : motifTypes)
-            {
-                assert(motifType>=1 && motifType<14);
-                motifTypeBitArray &= ~(1<<motifType);
-            }
-        }
-        void unsetAllButMotifTypes(std::vector<int> motifTypes)
-        {
-            std::unordered_set<int> maintainedMotifTypes;
-            maintainedMotifTypes.insert(motifTypes.begin(),motifTypes.end());
-            std::vector<int> motifTypesToUnset;
-            for(int motifType=1;motifType<14;motifType++)
-            {
-                if(maintainedMotifTypes.find(motifType)==maintainedMotifTypes.end())
-                {
-                    motifTypesToUnset.push_back(motifType);
-                }
-            }
-            unsetMotifTypes(motifTypesToUnset);
-        }
-        bool isMotifTypeSet(int motifType)
-        {
-            assert(motifType>=1 && motifType<14);
-            return motifTypeBitArray & (1<<motifType);
-        }
-        void printOut()
-        {
-            std::cout<<"-------------";
-            for(int i=1;i<14;i++)
-                if(isMotifTypeSet(i))
-                    std::cout<<"1"<<" ";
-                else
-                    std::cout<<"0"<<" ";
-            std::cout<<"--------------------"<<std::endl;
-        }
-        bool checkValidity()
-        {
-            bool res = motifTypeBitArray && !(motifTypeBitArray & (motifTypeBitArray-1));
-            if(!res)
-            {
-                std::cout<<"---------------------";
-                for(int i=1;i<13;i++)
-                    if(isMotifTypeSet(i))
-                        std::cout<<"1"<<" ";
-                    else
-                        std::cout<<"0"<<" ";
-                std::cout<<"--------------------"<<res<<std::endl;
-            }
-            return res;
-        }
+        void selfTest();        
+        void setMotifTypes(std::vector<int> motifTypes);
+        void unsetMotifTypes(std::vector<int> motifTypes);
+        void unsetAllButMotifTypes(std::vector<int> motifTypes);
+        bool isMotifTypeSet(int motifType);
+        void printOut();
+        bool checkValidity();
     } threeMotifStructure;
 
     static std::uint16_t update_edge_bitArray
