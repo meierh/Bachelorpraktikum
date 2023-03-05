@@ -30,7 +30,7 @@ public:
 	 * result_rank:    MPI Rank to receive the results
 	 */
 	static std::unique_ptr<HistogramData>
-	compute_edge_length_histogram_const_bin_width(const DistributedGraph& graph, const double bin_width,
+	compute_edge_length_histogram_const_bin_width(DistributedGraph& graph, const double bin_width,
 						      const unsigned int result_rank = 0);
 	/*
 	 * Version of Histogram method that creates a histogram with a given
@@ -42,7 +42,7 @@ public:
 	 * result_rank:    MPI Rank to receive the results
 	 */
 	static std::unique_ptr<HistogramData>
-	compute_edge_length_histogram_const_bin_count(const DistributedGraph& graph, const std::uint64_t bin_count,
+	compute_edge_length_histogram_const_bin_count(DistributedGraph& graph, const std::uint64_t bin_count,
 						      const unsigned int result_rank = 0);
 	static std::unique_ptr<HistogramData>
 	compute_edge_length_histogram_const_bin_width_sequential(const DistributedGraph& graph, double bin_width,
@@ -54,7 +54,7 @@ public:
 
 private:
 	static std::unique_ptr<HistogramData> compute_edge_length_histogram(
-	    const DistributedGraph& graph,
+	    DistributedGraph& graph,
 	    const std::function<std::unique_ptr<HistogramData>(const double, const double)> histogram_creator,
 	    const unsigned int result_rank);
 

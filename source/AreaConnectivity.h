@@ -31,7 +31,7 @@ public:
 		}
 	};
 	using AreaConnecMap = std::unordered_map<std::pair<std::string, std::string>, int, StdPair_hash>;
-	static std::unique_ptr<AreaConnecMap> compute_area_connectivity_strength(const DistributedGraph& graph,
+	static std::unique_ptr<AreaConnecMap> compute_area_connectivity_strength(DistributedGraph& graph,
 										 unsigned int result_rank = 0);
 	static std::unique_ptr<AreaConnecMap> area_connectivity_strength_sequential_helge(const DistributedGraph& graph,
 											  unsigned int result_rank = 0);

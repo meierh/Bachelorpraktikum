@@ -22,7 +22,7 @@ public:
 	 * Parameters
 	 * graph:           A DistributedGraph (Function is MPI compliant)
 	 */
-	static double compute_modularity(const DistributedGraph& graph);
+	static double compute_modularity(DistributedGraph& graph);
 	static double compute_modularity_sequential(const DistributedGraph& graph);
 	/*-------------------------Modularity----------------------------------|||*/
 private:

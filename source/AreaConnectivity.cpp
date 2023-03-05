@@ -1,7 +1,10 @@
 #include "AreaConnectivity.h"
 
 std::unique_ptr<AreaConnectivity::AreaConnecMap>
-AreaConnectivity::compute_area_connectivity_strength(const DistributedGraph& graph, const unsigned int result_rank) {
+AreaConnectivity::compute_area_connectivity_strength(DistributedGraph& graph, const unsigned int result_rank) {
+	graph.lock_all_rma_windows();
+	MPIWrapper::barrier();
+
 	// Test function parameters
 	const int number_of_ranks = MPIWrapper::get_number_ranks();
 	if (result_rank >= number_of_ranks) {
@@ -109,6 +112,9 @@ AreaConnectivity::compute_area_connectivity_strength(const DistributedGraph& gra
 			(*global_connec_name_map)[{source_area, target_area}] += std::get<4>(connec_data);
 		}
 	}
+
+	MPIWrapper::barrier();
+	graph.unlock_all_rma_windows();
 
 	return std::move(global_connec_name_map);
 }

@@ -13,7 +13,6 @@
 #include <iostream>
 
 #include "Edge.h"
-//#include "GraphProperty.h"
 
 inline int do_nothing(void*) {
 	return 0;
@@ -25,13 +24,18 @@ struct RMAWindow {
 	std::uint64_t size{};
 	std::vector<T*> base_pointers{};
 	T* my_base_pointer{};
+	// Lock status is assumed to be globally synchronized all the time.
+	// DO NOT CHANGE IT ON LESS THAN ALL RANKS!
+	bool window_locked_globally;
 
-	RMAWindow() {}
+	RMAWindow():window_locked_globally(false) {}
 
-	RMAWindow(T* ptr) : my_base_pointer(ptr) {
-
+	RMAWindow(T* ptr) : my_base_pointer(ptr),window_locked_globally(false) {
 	}
 
+	void set_locked_globally(){window_locked_globally=true;}
+	void set_unlocked_globally(){window_locked_globally=false;}
+	
 	RMAWindow(const RMAWindow& other) = default;
 	RMAWindow(RMAWindow&& other) = default;
 
@@ -361,7 +365,8 @@ public:
 	
 	template<typename T>
 	static void all_reduce(T* src, T* dest,int count,MPI_Datatype datatype,MPI_Op op) {
-		if (const auto error_code = MPI_Allreduce(src,dest,count,datatype,op,MPI_COMM_WORLD); error_code != 0) {
+		const int error_code = MPI_Allreduce(src,dest,count,datatype,op,MPI_COMM_WORLD);
+		if ( error_code != 0) {
 			std::cout << "All-reducing all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -369,7 +374,8 @@ public:
 	
 	template<typename T>
 	static void reduce(T* src, T* dest,int count,MPI_Datatype datatype,MPI_Op op,int root) {
-		if (const auto error_code = MPI_Reduce(src,dest,count,datatype,op,root,MPI_COMM_WORLD); error_code != 0) {
+		const int error_code = MPI_Reduce(src,dest,count,datatype,op,root,MPI_COMM_WORLD);
+		if ( error_code != 0) {
 			std::cout << "All-reducing all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -377,7 +383,8 @@ public:
 	
 	template<typename T>
 	static void gather(T* src, T* dest, int count, MPI_Datatype datatype,int root){
-		if (const auto error_code= MPI_Gather(src,count,datatype,dest,count,datatype,root,MPI_COMM_WORLD);	error_code != 0) {
+		const int error_code= MPI_Gather(src,count,datatype,dest,count,datatype,root,MPI_COMM_WORLD);
+		if (error_code != 0) {
 			std::cout << "Gathering all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -385,7 +392,8 @@ public:
 	
 	template<typename T>
 	static void all_gather(T* src, T* dest, int count, MPI_Datatype datatype){
-		if (const auto error_code= MPI_Allgather(src,count,datatype,dest,count,datatype,MPI_COMM_WORLD);	error_code != 0) {
+		const int error_code= MPI_Allgather(src,count,datatype,dest,count,datatype,MPI_COMM_WORLD);
+		if (error_code != 0) {
 			std::cout << "All_Gathering all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -393,7 +401,8 @@ public:
 	
 	template<typename T>
 	static void gatherv(T* src, int count, T* dest, int* destCounts, int* displs, MPI_Datatype datatype,int root){
-		if (const auto error_code= MPI_Gatherv(src,count,datatype,dest,destCounts,displs,datatype,root,MPI_COMM_WORLD);	error_code != 0) {
+		const int error_code= MPI_Gatherv(src,count,datatype,dest,destCounts,displs,datatype,root,MPI_COMM_WORLD);
+		if (error_code != 0) {
 			std::cout << "Gatherving all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -401,7 +410,8 @@ public:
 	
 	template<typename T>
 	static void all_gatherv(T* src, int count, T* dest, int* destCounts, int* displs, MPI_Datatype datatype){
-		if (const auto error_code= MPI_Allgatherv(src,count,datatype,dest,destCounts,displs,datatype,MPI_COMM_WORLD);	error_code != 0) {
+		const int error_code= MPI_Allgatherv(src,count,datatype,dest,destCounts,displs,datatype,MPI_COMM_WORLD);
+		if (error_code != 0) {
 			std::cout << "All_Gatherving all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -426,7 +436,9 @@ public:
 	 */
 	template<typename T>
 	static void passive_sync_rma_get(T *dest_addr, int count, int src_disp, int src_rank, MPI_Datatype datatype, const RMAWindow<T>& rma_window) {
-		lock_window_shared(src_rank,rma_window.window);
+		if(!rma_window.window_locked_globally){
+			lock_window_shared(src_rank,rma_window.window);
+		}
 		if(src_rank == my_rank) {	
 			const T* const src_base_ptr = rma_window.my_base_pointer;
 			const T* src_ptr = src_base_ptr+src_disp;
@@ -442,49 +454,8 @@ public:
 			}
 			MPI_Wait(&request_item, MPI_STATUS_IGNORE);
 		}
-		unlock_window(src_rank,rma_window.window);
-	}
-
-	static void Irecv(void* buffer,int count,MPI_Datatype datatype,int source,int tag,MPI_Request *request){
-		if(const int error_code = MPI_Irecv(buffer,count,datatype,source,tag,MPI_COMM_WORLD,request); error_code != 0){
-			std::cout << "Irecv returned the error: " << error_code << std::endl;
-			throw error_code;
-		}
-	}
-	
-	static void Isend(void* buffer,int count,MPI_Datatype datatype,int dest,int tag,MPI_Request *request){
-		if(const int error_code = MPI_Isend(buffer,count,datatype,dest,tag,MPI_COMM_WORLD,request); error_code != 0){
-			std::cout << "Isend returned the error: " << error_code << std::endl;
-			throw error_code;
-		}
-	}
-	
-	static void Waitall(int count, MPI_Request array_of_requests[]){
-		MPI_Status array_of_statuses[count];
-		if(const int error_code = MPI_Waitall(count,array_of_requests,array_of_statuses); error_code != 0){
-			std::cout << "Waitall returned the error: " << error_code << std::endl;
-			/*
-			for(int i=0; i<count; i++){
-				std::cout <<"Source "<<array_of_statuses[i].MPI_SOURCE <<" returned the error: " << error_code <<" in Waitall with Tag value "<<array_of_statuses[i].MPI_TAG<< std::endl;
-			}
-			*/
-			throw error_code;
-		}
-	}
-
-	static void Recv(void* buffer,int count,MPI_Datatype datatype,int source,int tag){
-		MPI_Status* status;
-		if(const int error_code = MPI_Recv(buffer,count,datatype,source,tag,MPI_COMM_WORLD,status); error_code != 0){
-			std::cout << "Recv returned the error: " << error_code << std::endl;
-			std::cout << "Source "<<status->MPI_SOURCE<<" returned the error: " << status->MPI_ERROR << std::endl;
-			throw error_code;
-		}
-	}
-	
-	static void Send(void* buffer,int count,MPI_Datatype datatype,int dest,int tag){
-		if(const int error_code = MPI_Send(buffer,count,datatype,dest,tag,MPI_COMM_WORLD); error_code != 0){
-			std::cout << "Send returned the error: " << error_code << std::endl;
-			throw error_code;
+		if(!rma_window.window_locked_globally){
+			unlock_window(src_rank,rma_window.window);
 		}
 	}
 };

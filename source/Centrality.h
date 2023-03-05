@@ -13,7 +13,7 @@
 #include <vector>
 
 class BetweennessCentrality {
-	static void compute_betweenness_centrality(const DistributedGraph& graph, unsigned int node_id, std::uint64_t total_number_nodes, const std::vector<std::uint64_t>& prefix_distribution, std::vector<double>& local_betweenness) {
+	static void compute_betweenness_centrality(DistributedGraph& graph, unsigned int node_id, std::uint64_t total_number_nodes, const std::vector<std::uint64_t>& prefix_distribution, std::vector<double>& local_betweenness) {
 		const auto my_rank = MPIWrapper::get_my_rank();
 
 		std::vector<std::vector<NodePath>> shortest_paths(total_number_nodes, std::vector<NodePath>{});
@@ -74,7 +74,7 @@ class BetweennessCentrality {
 	}
 
 public:
-	static double compute_average_betweenness_centrality(const DistributedGraph& graph) {
+	static double compute_average_betweenness_centrality(DistributedGraph& graph) {
 		const auto my_rank = MPIWrapper::get_my_rank();
 
 		const auto number_local_nodes = graph.get_number_local_nodes();

@@ -1,6 +1,8 @@
 #include "Modularity.h"
 
-double Modularity::compute_modularity(const DistributedGraph& graph) {
+double Modularity::compute_modularity(DistributedGraph& graph) {
+	graph.lock_all_rma_windows();
+	MPIWrapper::barrier();
 	const int my_rank = MPIWrapper::get_my_rank();
 	const int number_ranks = MPIWrapper::get_number_ranks();
 	const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
@@ -159,6 +161,9 @@ double Modularity::compute_modularity(const DistributedGraph& graph) {
 	double global_in_out_degree_node_sum = 0;
 	MPIWrapper::all_reduce<double>(&local_in_out_degree_node_sum, &global_in_out_degree_node_sum, 1, MPI_DOUBLE,
 				       MPI_SUM);
+
+	MPIWrapper::barrier();
+	graph.unlock_all_rma_windows();
 
 	// Compute modularity of number of edges, global adjacency and global in and out degree sums
 	return (static_cast<double>(global_adjacency_sum) + global_in_out_degree_node_sum) /

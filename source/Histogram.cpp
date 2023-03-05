@@ -1,7 +1,7 @@
 #include "Histogram.h"
 
 std::unique_ptr<Histogram::HistogramData>
-Histogram::compute_edge_length_histogram_const_bin_width(const DistributedGraph& graph, const double bin_width,
+Histogram::compute_edge_length_histogram_const_bin_width(DistributedGraph& graph, const double bin_width,
 							 const unsigned int result_rank) {
 	const int number_of_ranks = MPIWrapper::get_number_ranks();
 	if (result_rank >= number_of_ranks) {
@@ -47,7 +47,7 @@ Histogram::compute_edge_length_histogram_const_bin_width(const DistributedGraph&
 }
 
 std::unique_ptr<Histogram::HistogramData>
-Histogram::compute_edge_length_histogram_const_bin_count(const DistributedGraph& graph, const std::uint64_t bin_count,
+Histogram::compute_edge_length_histogram_const_bin_count(DistributedGraph& graph, const std::uint64_t bin_count,
 							 const unsigned int result_rank) {
 	const int number_of_ranks = MPIWrapper::get_number_ranks();
 	if (result_rank >= number_of_ranks) {
@@ -148,9 +148,12 @@ Histogram::compute_edge_length_histogram_const_bin_count_sequential(const Distri
 }
 
 std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogram(
-    const DistributedGraph& graph,
+    DistributedGraph& graph,
     const std::function<std::unique_ptr<HistogramData>(const double, const double)> histogram_creator,
     const unsigned int result_rank) {
+	graph.lock_all_rma_windows();
+	MPIWrapper::barrier();
+
 	// Test function parameters
 	const int my_rank = MPIWrapper::get_my_rank();
 	const int number_of_ranks = MPIWrapper::get_number_ranks();
@@ -234,6 +237,9 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 	} else {
 		histogram = std::make_unique<std::vector<std::pair<std::pair<double, double>, std::uint64_t>>>();
 	}
+
+	MPIWrapper::barrier();
+	graph.unlock_all_rma_windows();
 
 	return std::move(histogram);
 }
