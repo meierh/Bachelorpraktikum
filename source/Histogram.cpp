@@ -171,18 +171,18 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 		    auto node_position_vec =
 			std::make_unique<std::vector<std::tuple<std::uint64_t, std::uint64_t, Vec3d>>>(out_edges.size());
 
-/*
 			std::transform(out_edges.cbegin(), out_edges.cend(), node_position_vec->begin(),
 							[&](const OutEdge& oEdge) {
 								return std::tuple<std::uint64_t, std::uint64_t, Vec3d>
 										{oEdge.target_rank, oEdge.target_id, source_node_pos};
 							});
-*/
 
+/*
 		    for (int i = 0; i < out_edges.size(); i++) {
 			    (*node_position_vec)[i] =
 				std::tie(out_edges[i].target_rank, out_edges[i].target_id, source_node_pos);
 		    }
+*/
 
 		    return std::move(node_position_vec);
 	    };
