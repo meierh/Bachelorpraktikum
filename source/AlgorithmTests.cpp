@@ -67,7 +67,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 		modularity_seq = Modularity::compute_modularity_sequential(dg);
 		MPIWrapper::barrier();
 		double absolute_error = std::abs(modularity_par - modularity_seq);
-		double relative_error = absolute_error / 0.5 * (modularity_par + modularity_seq);
+		double relative_error = absolute_error / (0.5 * (modularity_par + modularity_seq));
 		if (relative_error > 1e-8) {
 			std::stringstream error_code;
 			error_code << "modularity_par:" << modularity_par << "   modularity_seq:" << modularity_seq
@@ -82,15 +82,38 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 	if (my_rank == 0)
 		std::cout << test_result << std::endl;
 
-	/*
-	// Test NetworkMotifs algorithm parallelization
-	std::vector<long double> motifs_par, motifs_seq;
+	// Test Network Motif algorithm parallelization
+	std::array<long double,14> motifs_par, motifs_seq;
 	try {
-		//motifs_par = NetworkMotifs::compute_network_TripleMotifs(dg);
+		motifs_par = NetworkMotifs::compute_network_TripleMotifs(dg);
 		MPIWrapper::barrier();
-		std::cout << std::endl;
 		motifs_seq = NetworkMotifs::compute_network_TripleMotifs_SingleProc(dg);
 		MPIWrapper::barrier();
+		
+		if(my_rank==0)
+		{
+			std::array<long double,14> comp;
+			for(int j=0;j<comp.size();j++)
+			{
+				comp[j] = motifs_par[j]-motifs_seq[j];
+			}
+			double absolute_perc_sum_error = std::accumulate(comp.begin()+1,comp.end(),0);
+			double absolute_count_error = comp[0];			
+			double relative_error = absolute_perc_sum_error + absolute_count_error/ (0.5*(motifs_par[0]+motifs_seq[0]));
+			if (relative_error > 1e-8) 
+			{
+				std::stringstream error_code;
+				error_code<<"par:";
+				for(long double m : motifs_par)
+					error_code<<m<<"|";
+				error_code<<std::endl;
+				error_code<<"seq:";
+				for(long double m : motifs_seq)
+					error_code<<m<<"|";
+				error_code<<std::endl;
+				throw error_code.str();
+			}
+		}
 
 		test_result = "NetworkMotifs test completed";
 	} catch (std::string error_code) {
@@ -98,7 +121,6 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 	}
 	if (my_rank == 0)
 		std::cout << test_result << std::endl;
-	*/
 }
 
 void test_centrality_approx(std::filesystem::path input_directory) {

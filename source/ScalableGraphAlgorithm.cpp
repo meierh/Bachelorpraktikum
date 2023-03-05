@@ -66,42 +66,6 @@ void calculate_metrics(std::filesystem::path input_directory) {
 		fflush(stdout);
 	}
 }
-
-void test_networkMotifs(std::filesystem::path input_directory) {
-	const auto my_rank = MPIWrapper::get_my_rank();
-
-	DistributedGraph dg(input_directory);
-	MPIWrapper::barrier();
-	
-	// Test NetworkMotifs algorithm parallelization
-	std::string test_result;
-	std::array<long double,14> motifs_par, motifs_seq;
-	try {
-		motifs_par = NetworkMotifs::compute_network_TripleMotifs(dg);
-		MPIWrapper::barrier();
-		motifs_seq = NetworkMotifs::compute_network_TripleMotifs_SingleProc(dg);
-		MPIWrapper::barrier();
-		
-		if(my_rank==0)
-		{
-			std::cout<<"par:";
-			for(long double m : motifs_par)
-				std::cout<<m<<"|";
-			std::cout<<std::endl;
-
-			std::cout<<"seq:";
-			for(long double m : motifs_seq)
-				std::cout<<m<<"|";
-			std::cout<<std::endl;
-		}
-
-		test_result = "NetworkMotifs test completed";
-	} catch (std::string error_code) {
-		test_result = "NetworkMotifs Error :" + error_code;
-	}
-	if (my_rank == 0)
-		std::cout << test_result << std::endl;
-}
 	
 	
 int main(int argument_count, char* arguments[]) {
@@ -115,8 +79,7 @@ int main(int argument_count, char* arguments[]) {
 
 	MPIWrapper::init(argument_count, arguments);
 
-	//test_algorithm_parallelization(input_directory);
-	test_networkMotifs(input_directory);
+	test_algorithm_parallelization(input_directory);
 
 	MPIWrapper::finalize();
 
