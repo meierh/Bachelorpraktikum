@@ -286,17 +286,28 @@ std::vector<long double> NetworkMotifs::compute_network_TripleMotifs_SingleProc
     std::vector<std::uint64_t> number_nodes_of_ranks(number_ranks);
     MPIWrapper::gather<uint64_t>(&number_local_nodes, number_nodes_of_ranks.data(), 1, MPI_UINT64_T, result_rank);
     
-    //Print all out edges:
+    //Print all out edges AND check if there are nodes with self-referencing edges
     /*if(my_rank == result_rank) {
+        
+        std::unordered_map<std::tuple<std::pair<std::uint64_t, std::uint64_t>, std::pair<std::uint64_t, std::uint64_t>>, int, StdPair_hash> edges;
         for(int r = 0; r < number_ranks; r++) {
             for(std::uint64_t n = 0; n < number_nodes_of_ranks[r]; n++) {
-                auto edges = graph.get_out_edges(r, n);
-                for(auto edge : edges){
-                    std::cout << "edge: " << r << "," << n << " -> " << edge.target_rank << "," << edge.target_id << std::endl;
+                auto out_edges = graph.get_out_edges(r, n);
+                for(auto out_edge : out_edges){
+                    //std::cout << "edge: " << r << "," << n << " -> " << out_edge.target_rank << "," << out_edge.target_id << std::endl;
+                    if(out_edge.target_rank == r && out_edge.target_id == n) {
+                        std::cout << "error: node with self referencing out_edge found: node(" << r << ", " << n << ")" << std::endl;
+                    }
+                }
+                auto in_edges = graph.get_in_edges(r, n);
+                for(auto in_edge : in_edges){
+                    if(in_edge.source_rank == r && in_edge.source_id == n) {
+                        std::cout << "error: node with self referencing in_edge found: node(" << r << ", " << n << ")" << std::endl;
+                    }
                 }
             }
         }
-        std::cout << std::endl;
+        std::cout << std::endl;  
     }*/
 
     // Prepare structure
@@ -342,6 +353,8 @@ std::vector<long double> NetworkMotifs::compute_network_TripleMotifs_SingleProc
 
                 for(auto iterOuter = adjacent_nodes.begin(); iterOuter != adjacent_nodes.end(); iterOuter++) {
                     
+                    // Prrevent overlapping of outer and inner 
+                    // -> consider only each tripple-node-set (ignore permutations)
                     std::pair<std::uint64_t,std::uint64_t> node_Outer_key = iterOuter->first;
                     auto iterInner = iterOuter;
                     iterInner++;
@@ -349,6 +362,13 @@ std::vector<long double> NetworkMotifs::compute_network_TripleMotifs_SingleProc
                         
                         std::pair<std::uint64_t,std::uint64_t> node_Inner_key = iterInner->first;
                         if(node_Inner_key != node_Outer_key) {
+                            // Exclude nodes with self-referencing edges
+                            if((current_rank == node_Outer_key.first && current_node == node_Outer_key.second) ||
+                             (current_rank == node_Inner_key.first && current_node == node_Inner_key.second) ||
+                             (node_Outer_key.first == node_Inner_key.first && node_Outer_key.second == node_Inner_key.second)){
+                                continue;
+                            }
+
                             threeMotifStructure motifStruc;
                             motifStruc.node_1_rank = current_rank;
                             motifStruc.node_1_local = current_node;
@@ -371,7 +391,7 @@ std::vector<long double> NetworkMotifs::compute_network_TripleMotifs_SingleProc
                             std::uint16_t exists_edge_bitArray_updated = update_edge_bitArray(graph, exists_edge_bitArray, 
                                         motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);;
 
-                            //std::cout << "node1=" << motifStruc.node_1_rank << motifStruc.node_1_local << ", node2=" << motifStruc.node_2_rank << motifStruc.node_2_local << ", node3=" << motifStruc.node_3_rank << motifStruc.node_3_local << std::endl;
+                            //std::cout << "node1=" << motifStruc.node_1_rank << "." << motifStruc.node_1_local << ", node2=" << motifStruc.node_2_rank << "." << motifStruc.node_2_local << ", node3=" << motifStruc.node_3_rank << "." << motifStruc.node_3_local << std::endl;
                             //std::cout << "exists_edge_bitArray = " << exists_edge_bitArray << " --updated-> " << exists_edge_bitArray_updated << std::endl;
     
                             switch (exists_edge_bitArray)   // optimisation possible if highest cases are up
@@ -489,7 +509,6 @@ std::uint16_t NetworkMotifs::update_edge_bitArray
     std::uint64_t node_3_local
 )
 {
-    //std::cout << "update_edge_bitArray called" << std::endl;
     const std::vector<OutEdge>& oEdges = graph.get_out_edges(node_2_rank, node_2_local);
     const std::vector<InEdge>& iEdges = graph.get_in_edges(node_2_rank, node_2_local);
     
