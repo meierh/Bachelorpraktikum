@@ -118,7 +118,7 @@ public:
                                                 recv_ranks_to_nbrOfQuestions,displ_recv_ranks_to_nbrOfQuestions);
          
     // Compute the answers to questions
-	SCOREP_USER_REGION_BEGIN(region_handle_ComputeAnswers, "SendBackAnswers",SCOREP_USER_REGION_TYPE_COMMON)
+	SCOREP_USER_REGION_BEGIN(region_handle_ComputeAnswers, "ComputeAnswers",SCOREP_USER_REGION_TYPE_COMMON)
         adressee_structure.computeAnswersToQuestions(graph,generateAnswers);
 	SCOREP_USER_REGION_END(region_handle_ComputeAnswers)
 
@@ -476,6 +476,7 @@ public:
             
             structureStatus = ClosedQuestionsPreparation;
             
+			/*
             for(auto keyValue = questioner_node_to_outerIndex_and_innerIndex.begin();
                 keyValue!=questioner_node_to_outerIndex_and_innerIndex.end();
                 keyValue++)
@@ -494,6 +495,7 @@ public:
                 assert(questioner==nodes_that_ask_the_question[outerIndex][innerIndex]);
                 assert(innerIndex<question_parameters[outerIndex].size());
             }
+			*/
         };
 
     //Funktions for use on answerer rank side

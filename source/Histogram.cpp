@@ -166,14 +166,24 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 	std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t, std::uint64_t, Vec3d>>>(
 	    const DistributedGraph& dg, std::uint64_t node_local_ind)>
 	    transfer_node_position = [&](const DistributedGraph& dg, std::uint64_t node_local_ind) {
-		    const std::vector<OutEdge>& oEdges = dg.get_out_edges(my_rank, node_local_ind);
+		    const std::vector<OutEdge>& out_edges = dg.get_out_edges(my_rank, node_local_ind);
 		    Vec3d source_node_pos = dg.get_node_position(my_rank, node_local_ind);
 		    auto node_position_vec =
-			std::make_unique<std::vector<std::tuple<std::uint64_t, std::uint64_t, Vec3d>>>(oEdges.size());
-		    for (int i = 0; i < oEdges.size(); i++) {
+			std::make_unique<std::vector<std::tuple<std::uint64_t, std::uint64_t, Vec3d>>>(out_edges.size());
+
+/*
+			std::transform(out_edges.cbegin(), out_edges.cend(), node_position_vec->begin(),
+							[&](const OutEdge& oEdge) {
+								return std::tuple<std::uint64_t, std::uint64_t, Vec3d>
+										{oEdge.target_rank, oEdge.target_id, source_node_pos};
+							});
+*/
+
+		    for (int i = 0; i < out_edges.size(); i++) {
 			    (*node_position_vec)[i] =
-				std::tie(oEdges[i].target_rank, oEdges[i].target_id, source_node_pos);
+				std::tie(out_edges[i].target_rank, out_edges[i].target_id, source_node_pos);
 		    }
+
 		    return std::move(node_position_vec);
 	    };
 	std::function<double(const DistributedGraph& dg, std::uint64_t node_local_ind, Vec3d para)>

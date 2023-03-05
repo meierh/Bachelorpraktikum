@@ -22,12 +22,24 @@ AreaConnectivity::compute_area_connectivity_strength(DistributedGraph& graph, co
 		    auto connection_sources =
 			std::make_unique<std::vector<std::tuple<std::uint64_t, std::uint64_t, AreaConnectivityInfo>>>(
 			    out_edges.size());
+/*
+			std::transform(out_edges.cbegin(), out_edges.cend(), connection_sources->begin(),
+							[&](const OutEdge& oEdge) {
+								AreaConnectivityInfo one_connection = {my_rank, node_areaID, oEdge.target_rank,
+																		-1, oEdge.weight};
+
+								return std::tuple<std::uint64_t, std::uint64_t, AreaConnectivityInfo>
+										{oEdge.target_rank, oEdge.target_id, one_connection};
+							});
+*/
+
 		    for (int i = 0; i < out_edges.size(); i++) {
 			    AreaConnectivityInfo one_connection = {my_rank, node_areaID, out_edges[i].target_rank, -1,
 								   out_edges[i].weight};
 			    (*connection_sources)[i] =
 				std::tie(out_edges[i].target_rank, out_edges[i].target_id, one_connection);
 		    }
+
 		    return std::move(connection_sources);
 	    };
 	std::function<AreaConnectivityInfo(const DistributedGraph&, std::uint64_t, AreaConnectivityInfo)>

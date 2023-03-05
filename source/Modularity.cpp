@@ -46,17 +46,24 @@ double Modularity::compute_modularity(DistributedGraph& graph) {
 		    auto key_value = area_names_map.find(area_names[node_area_localID]);
 		    assert(key_value != area_names_map.end());
 		    std::uint64_t area_globalID = key_value->second;
-
-		    auto outward_node_area =
-			std::make_unique<std::vector<std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>>>();
-
 		    const std::vector<OutEdge>& out_edges = dg.get_out_edges(my_rank, node_localID);
+		    auto outward_node_area =
+			std::make_unique<std::vector<std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>>>(out_edges.size());
+/*
+			std::transform(out_edges.cbegin(), out_edges.cend(), outward_node_area->begin(),
+							[&](const OutEdge& oEdge) {
+								return std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>			
+										{oEdge.target_rank, oEdge.target_id, area_globalID};
+							});
+*/
+
 		    for (const OutEdge& out_edge : out_edges) {
 			    std::uint64_t rank = out_edge.target_rank;
 			    std::uint64_t id = out_edge.target_id;
 			    outward_node_area->push_back(
 				std::tie<std::uint64_t, std::uint64_t, std::uint64_t>(rank, id, area_globalID));
 		    }
+
 		    return outward_node_area;
 	    };
 	std::function<std::uint8_t(const DistributedGraph& dg, std::uint64_t node_localID, std::uint64_t area_globalID)>
