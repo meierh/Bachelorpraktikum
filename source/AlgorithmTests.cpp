@@ -32,29 +32,36 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 
 	// Test Histogram algorithm parallelization
 	std::unique_ptr<Histogram::HistogramData> histogram_count_bins;
-	std::unique_ptr<Histogram::HistogramData> histogram_width_bins;
 	std::unique_ptr<Histogram::HistogramData> histogram_count_bins_sequential;
-	std::unique_ptr<Histogram::HistogramData> histogram_width_bins_sequential;
-	double bin_width = 1;
 	std::uint64_t bin_count = 50;
 	try {
-
 		histogram_count_bins = Histogram::compute_edge_length_histogram_const_bin_count(dg, bin_count);
-		MPIWrapper::barrier();
-		histogram_width_bins = Histogram::compute_edge_length_histogram_const_bin_width(dg, bin_width);
 		MPIWrapper::barrier();
 		histogram_count_bins_sequential =
 		    Histogram::compute_edge_length_histogram_const_bin_count_sequential(dg, bin_count);
 		MPIWrapper::barrier();
+		compare_edge_length_histogram(*histogram_count_bins, *histogram_count_bins_sequential, 1e-8);
+
+		test_result = "Count Bins Histogram test completed";
+	} catch (std::string error_code) {
+		test_result = "Count Bins Histogram Error :" + error_code;
+	}
+	if (my_rank == 0)
+		std::cout << test_result << std::endl;
+	
+	std::unique_ptr<Histogram::HistogramData> histogram_width_bins;
+	std::unique_ptr<Histogram::HistogramData> histogram_width_bins_sequential;
+	double bin_width = 1;
+	try {
+		histogram_width_bins = Histogram::compute_edge_length_histogram_const_bin_width(dg, bin_width);
+		MPIWrapper::barrier();
 		histogram_width_bins_sequential =
 		    Histogram::compute_edge_length_histogram_const_bin_width_sequential(dg, bin_width);
-		MPIWrapper::barrier();
-		compare_edge_length_histogram(*histogram_count_bins, *histogram_count_bins_sequential, 1e-8);
 		compare_edge_length_histogram(*histogram_width_bins, *histogram_width_bins_sequential, 1e-8);
 
-		test_result = "Histogram test completed";
+		test_result = "Width Bins Histogram test completed";
 	} catch (std::string error_code) {
-		test_result = "Histogram Error :" + error_code;
+		test_result = "Width Bins Histogram Error :" + error_code;
 	}
 	if (my_rank == 0)
 		std::cout << test_result << std::endl;
@@ -89,7 +96,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 		MPIWrapper::barrier();
 		motifs_seq = NetworkMotifs::compute_network_TripleMotifs_SingleProc(dg);
 		MPIWrapper::barrier();
-		
+
 		if(my_rank==0)
 		{
 			std::array<long double,14> comp;
@@ -100,10 +107,10 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 			double absolute_perc_sum_error = std::accumulate(comp.begin()+1,comp.end(),0);
 			double absolute_count_error = comp[0];			
 			double relative_error = absolute_perc_sum_error + absolute_count_error/ (0.5*(motifs_par[0]+motifs_seq[0]));
-			if (relative_error > 1e-8) 
+			if (true || relative_error > 1e-8) 
 			{
 				std::stringstream error_code;
-				error_code<<"par:";
+				error_code<<std::endl<<"par:";
 				for(long double m : motifs_par)
 					error_code<<m<<"|";
 				error_code<<std::endl;

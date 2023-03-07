@@ -2,12 +2,13 @@
 
 std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
 (
-    const DistributedGraph& graph,
+    DistributedGraph& graph,
     unsigned int resultToRank
 )
 {
     const int my_rank = MPIWrapper::get_my_rank();
     const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
+	//graph.lock_all_rma_windows();
     
     //Create rank local area distance sum
     std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,threeMotifStructure>>>
@@ -31,8 +32,11 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
             
             for(const OutEdge& oEdge : oEdges)
             {
+                //std::cout<<"my_rank:"<<my_rank<<" oEdge: "<<oEdge.target_rank<<","<<oEdge.target_id<<std::endl;
                 if(!(oEdge.target_rank==my_rank && oEdge.target_id==node_local_ind))
                 {
+                    //std::cout<<"my_rank:"<<my_rank<<" oEdge Look at:"<<oEdge.target_rank<<","<<oEdge.target_id<<std::endl;
+
                     std::pair<std::pair<std::uint64_t,std::uint64_t>,std::pair<bool,bool>>node_information(std::pair<std::uint64_t,std::uint64_t>(oEdge.target_rank,oEdge.target_id),std::pair<bool,bool>(true,false));
                 
                     adjacent_nodes_list.push_back(node_information);
@@ -43,8 +47,11 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
             }
             for(const InEdge& iEdge : iEdges)
             {
+                //std::cout<<"my_rank:"<<my_rank<<" iEdge: "<<iEdge.source_rank<<","<<iEdge.source_id<<std::endl;
                 if(!(iEdge.source_rank==my_rank && iEdge.source_id==node_local_ind))
                 {
+                    //std::cout<<"my_rank:"<<my_rank<<" iEdge Look at:"<<iEdge.source_rank<<","<<iEdge.source_id<<std::endl;
+
                     std::pair<std::pair<std::uint64_t,std::uint64_t>,std::pair<bool,bool>>node_information(std::pair<std::uint64_t,std::uint64_t>(iEdge.source_rank,iEdge.source_id),std::pair<bool,bool>(false,true));
                 
                     auto entry = adjacent_nodes_to_index.find(node_information.first);
@@ -62,6 +69,8 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
                 }
             }
             
+            //std::cout<<"my_rank:"<<my_rank<<" node_local_ind:"<<node_local_ind<<"  adjacent_nodes_list.size():"<<adjacent_nodes_list.size()<<std::endl;
+
             for(int i=0; i<adjacent_nodes_list.size(); i++)
             {
                 std::pair<std::uint64_t,std::uint64_t>& node_Outer = adjacent_nodes_list[i].first;
@@ -135,6 +144,7 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
                     
                     auto possible_motif = std::tie<std::uint64_t,std::uint64_t,threeMotifStructure>
                                                     (node_Outer.first,node_Outer.second,motifStruc);
+                    //std::cout<<my_rank<<" send to:"<<node_Outer.first<<std::endl;
                     ref_this_node_possible_motifs.push_back(possible_motif);
                 }
             }
@@ -189,13 +199,13 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
                 //maintain motifs 8,10,11,13
                 possible_motif.unsetMotifTypes({1,2,3,4,5,6,7,9,12});
             }
-            else if(exists_edge_node2_to_node3 && !exists_edge_node2_to_node3)
+            else if(exists_edge_node2_to_node3 && !exists_edge_node3_to_node2)
             // only edge from node 2 to node 3 
             {
                 //maintain motifs 5,7
                 possible_motif.unsetMotifTypes({1,2,3,4,6,8,9,10,11,12,13});
             }
-            else if(!exists_edge_node2_to_node3 && exists_edge_node2_to_node3)
+            else if(!exists_edge_node2_to_node3 && exists_edge_node3_to_node2)
             // only edge from node 3 to node 2 
             {
                 //maintain motifs 12
@@ -219,7 +229,7 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
     
     std::array<std::uint64_t,14> motifTypeCount;
     motifTypeCount.fill(0);
-    
+
     for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
     {
         std::unique_ptr<std::vector<threeMotifStructure>> this_node_motifs_results;
@@ -228,6 +238,8 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
         for(int i=0;i<this_node_motifs_results->size();i++)
         {
             threeMotifStructure& one_motif = (*this_node_motifs_results)[i];
+            //one_motif.printOutComplete();
+
             assert(one_motif.checkValidity()); 
             for(int motifType=1;motifType<14;motifType++)
             {
@@ -236,11 +248,18 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
             }
         }
     }
+    MPIWrapper::barrier();
+    std::cout<<my_rank<<"  -:";
+    for(std::uint64_t m : motifTypeCount)
+        std::cout<<m<<"|";
+    std::cout<<std::endl;
+    fflush(stdout);
+    MPIWrapper::barrier();    
     
     std::array<std::uint64_t,14> motifTypeCountTotal;
     MPIWrapper::reduce<std::uint64_t>(motifTypeCount.data(),motifTypeCountTotal.data(),                                      
                                       14,MPI_UINT64_T,MPI_SUM,resultToRank);
-    
+
     if(my_rank==resultToRank)
     {
         //Order invariant motifs were counted two times each
@@ -248,16 +267,16 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
         motifTypeCountTotal[1]/=2;
         assert(motifTypeCountTotal[3]%2 == 0);
         motifTypeCountTotal[3]/=2;
-        assert(motifTypeCountTotal[5]%2 == 0);
-        motifTypeCountTotal[5]/=2;
+        //assert(motifTypeCountTotal[5]%2 == 0);
+        //motifTypeCountTotal[5]/=2;
         assert(motifTypeCountTotal[8]%2 == 0);
         motifTypeCountTotal[8]/=2;
         assert(motifTypeCountTotal[9]%2 == 0);
         motifTypeCountTotal[9]/=2;
-        assert(motifTypeCountTotal[11]%2 == 0);
-        motifTypeCountTotal[11]/=2;
-        assert(motifTypeCountTotal[12]%2 == 0);
-        motifTypeCountTotal[12]/=2;
+        //assert(motifTypeCountTotal[11]%2 == 0);
+        //motifTypeCountTotal[11]/=2;
+        //assert(motifTypeCountTotal[12]%2 == 0);
+        //motifTypeCountTotal[12]/=2;
         
         //Rotational invariant motifs were counted three times each
         assert(motifTypeCountTotal[7]%3 == 0);
@@ -265,7 +284,7 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
         
         //Order and Rotational invariant motifs were counted six times each
         assert(motifTypeCountTotal[13]%6 == 0);
-        motifTypeCountTotal[13]/=6;        
+        motifTypeCountTotal[13]/=6;
     }
     
     std::array<long double,14> motifFraction;
@@ -279,13 +298,15 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
             //motifFraction[motifType] = static_cast<long double>(motifTypeCountTotal[motifType]) / static_cast<long double>(total_number_of_motifs);
         }
     }
-
+    
+	//graph.unlock_all_rma_windows();
+    
     return motifFraction;
 }
 
 std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs_SingleProc
 (
-    const DistributedGraph& graph,
+    DistributedGraph& graph,
     unsigned int result_rank
 )
 {
@@ -331,11 +352,9 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs_SinglePro
             //std::cout << "Scanning nodes of rank " << current_rank+1 << " of " << number_ranks << " ..." << std::endl;
             for(std::uint64_t current_node = 0; current_node < number_nodes_of_ranks[current_rank]; current_node++) {
                 
-                //std::cout << "next node: " << current_rank << "," << current_node << std::endl;
-
                 const std::vector<OutEdge>& oEdges = graph.get_out_edges(current_rank, current_node);
                 const std::vector<InEdge>& iEdges = graph.get_in_edges(current_rank, current_node);
-                
+
                 std::unordered_map<std::pair<std::uint64_t, std::uint64_t>,
                                 std::pair<bool,bool>,
                                 StdPair_hash> adjacent_nodes;
@@ -400,10 +419,10 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs_SinglePro
                             exists_edge_bitArray |= exists_edge_node1_to_node3 ? 4 : 0;
                             exists_edge_bitArray |= exists_edge_node3_to_node1 ? 8 : 0;
 
+                            
                             std::uint16_t exists_edge_bitArray_updated = update_edge_bitArray(graph, exists_edge_bitArray, 
                                         motifStruc.node_2_rank, motifStruc.node_2_local, motifStruc.node_3_rank, motifStruc.node_3_local);;
 
-                            //std::cout << "node1=" << motifStruc.node_1_rank << "." << motifStruc.node_1_local << ", node2=" << motifStruc.node_2_rank << "." << motifStruc.node_2_local << ", node3=" << motifStruc.node_3_rank << "." << motifStruc.node_3_local << std::endl;
                             //std::cout << "exists_edge_bitArray = " << exists_edge_bitArray << " --updated-> " << exists_edge_bitArray_updated << std::endl;
     
                             switch (exists_edge_bitArray)   // optimisation possible if highest cases are up
@@ -487,17 +506,17 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs_SinglePro
         if(motifTypeCount[7]%3 != 0) std::cout << "error: motifTypeCount[7]%3 != 0 ==> " << motifTypeCount[7] << std::endl;
         motifTypeCount[7] /= 3;
         if(motifTypeCount[13]%3 != 0) std::cout << "error: motifTypeCount[13]%3 != 0 ==> " << motifTypeCount[13] << std::endl; 
-        motifTypeCount[13] /= 3;      
+        motifTypeCount[13] /= 3;
     }
-    
+
     std::array<long double,14> motifFraction;
     if(my_rank == result_rank) {
         std::uint64_t total_number_of_motifs = std::accumulate(motifTypeCount.begin(),motifTypeCount.end(), 0);
         motifFraction[0] = total_number_of_motifs;
 
         for(int motifType = 1; motifType < 14; motifType++) {
-            //motifFraction[motifType] = motifTypeCount[motifType];
-            motifFraction[motifType] = static_cast<long double>(motifTypeCount[motifType]) / static_cast<long double>(total_number_of_motifs);
+            motifFraction[motifType] = motifTypeCount[motifType];
+            //motifFraction[motifType] = static_cast<long double>(motifTypeCount[motifType]) / static_cast<long double>(total_number_of_motifs);
         }
     }
 
@@ -514,7 +533,7 @@ std::uint16_t NetworkMotifs::update_edge_bitArray
     unsigned int node_3_rank, 
     std::uint64_t node_3_local
 )
-{
+{    
     const std::vector<OutEdge>& oEdges = graph.get_out_edges(node_2_rank, node_2_local);
     const std::vector<InEdge>& iEdges = graph.get_in_edges(node_2_rank, node_2_local);
     
@@ -628,9 +647,17 @@ bool NetworkMotifs::threeMotifStructure::isMotifTypeSet(int motifType)
     assert(motifType>=1 && motifType<14);
     return motifTypeBitArray & (1<<motifType);
 }
+
+void NetworkMotifs::threeMotifStructure::printOutComplete()
+{
+    std::cout<<"("<<node_1_rank<<","<<node_2_rank<<
+    ","<<node_3_rank<<")";
+    printOut();
+}
+
 void NetworkMotifs::threeMotifStructure::printOut()
 {
-    std::cout<<"-------------";
+    std::cout<<"---";
     for(int i=1;i<14;i++)
         if(isMotifTypeSet(i))
             std::cout<<"1"<<" ";

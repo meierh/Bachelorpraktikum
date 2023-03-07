@@ -21,15 +21,15 @@ public:
      */
     static std::array<long double,14> compute_network_TripleMotifs
     (
-        const DistributedGraph& graph,
+        DistributedGraph& graph,
         unsigned int resultToRank = 0
     );
     /*-------------------------NetworkMotifs----------------------------------|||*/
 
     static std::array<long double,14> compute_network_TripleMotifs_SingleProc
     (
-    const DistributedGraph& graph,
-    unsigned int my_rank = 0
+        DistributedGraph& graph,
+        unsigned int my_rank = 0
     );
 
 private:
@@ -57,6 +57,7 @@ private:
         void unsetMotifTypes(std::vector<int> motifTypes);
         void unsetAllButMotifTypes(std::vector<int> motifTypes);
         bool isMotifTypeSet(int motifType);
+        void printOutComplete();
         void printOut();
         bool checkValidity();
     } threeMotifStructure;

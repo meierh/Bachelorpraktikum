@@ -64,20 +64,19 @@ Histogram::compute_edge_length_histogram_const_bin_count(DistributedGraph& graph
 
 	std::function<std::unique_ptr<HistogramData>(const double, const double)> bin_count_histogram_creator =
 	    [=](const double min_length, const double max_length) {
-		    double span_length = max_length - min_length;
-			/*
-		    if (span_length <= 0) {
-			    throw std::invalid_argument("Span of edge distribution must be larger than zero!");
+		    double span_length = max_length - min_length;			
+		    if (span_length < 0) {
+			    throw std::invalid_argument("Span of edge distribution must not be smaller than zero!");
 		    }
-		    */
-		    double bin_width = span_length / bin_count;
-			if(span_length==0) {
-				bin_width = std::numeric_limits<double>::epsilon();
-			}
-		    // Small increment to avoid comparison errors
-		    bin_width = std::nextafter(bin_width, bin_width + 1);
+			// Solution to create a epsilon that is robust in 
+			// the case of multiplication and division
+			double epsilon_big = std::numeric_limits<double>::epsilon()*1000;
+			double epsilon_small = std::numeric_limits<double>::epsilon()*100;
+
+		    double bin_width = (span_length / bin_count) + epsilon_big;
+
 		    // Small decrement to avoid comparison errors
-		    double start_length = std::nextafter(min_length, min_length - 1);
+		    double start_length = min_length - epsilon_small;
 
 		    auto histogram = std::make_unique<HistogramData>(bin_count);
 		    for (int i = 0; i < bin_count; i++) {
@@ -86,7 +85,7 @@ Histogram::compute_edge_length_histogram_const_bin_count(DistributedGraph& graph
 			    (*histogram)[i].second = 0;
 			    start_length = start_length + bin_width;
 		    }
-
+		
 		    assert(histogram->front().first.first < min_length);
 		    assert(histogram->back().first.second > max_length);
 		    return std::move(histogram);
@@ -140,16 +139,18 @@ Histogram::compute_edge_length_histogram_const_bin_count_sequential(const Distri
 	std::function<std::unique_ptr<HistogramData>(double, double)> bin_count_histogram_creator =
 	    [=](double min_length, double max_length) {
 		    double span_length = max_length - min_length;
-			/*
-		    if (span_length <= 0) {
+		    if (span_length < 0) {
 			    throw std::invalid_argument("Span of edge distribution must be larger than zero!");
 		    }
-		    */
-		    double bin_width = span_length / bin_count;
-			if(span_length==0) {
-				bin_width = std::numeric_limits<double>::epsilon();
-			}
-		    double start_length = min_length;
+			// Solution to create a epsilon that is robust in 
+			// the case of multiplication and division
+			double epsilon_big = std::numeric_limits<double>::epsilon()*1000;
+			double epsilon_small = std::numeric_limits<double>::epsilon()*100;
+
+		    double bin_width = (span_length / bin_count) + epsilon_big;
+
+		    // Small decrement to avoid comparison errors
+		    double start_length = min_length - epsilon_small;
 
 		    auto histogram = std::make_unique<HistogramData>(bin_count);
 		    for (int i = 0; i < bin_count; i++) {
@@ -226,14 +227,19 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 	}
 
 	// Compute the smallest and largest edge length globally
-	const auto [min_length, max_length] = std::minmax_element(edge_lengths.begin(), edge_lengths.end());
-	double min_len = *min_length;
-	double max_len = *max_length;
+	double min_len = std::numeric_limits<double>::max();
+	double max_len = std::numeric_limits<double>::min();
+	if(edge_lengths.size()>0)
+	{
+		const auto [min_length, max_length] = std::minmax_element(edge_lengths.begin(), edge_lengths.end());
+		min_len = *min_length;
+		max_len = *max_length;
+	}
 	double global_min_length = 0;
 	double global_max_length = 0;
 	MPIWrapper::all_reduce<double>(&min_len, &global_min_length, 1, MPI_DOUBLE, MPI_MIN);
 	MPIWrapper::all_reduce<double>(&max_len, &global_max_length, 1, MPI_DOUBLE, MPI_MAX);
-
+	
 	// Create histogram with local edge data
 	std::unique_ptr<HistogramData> histogram = histogram_creator(global_min_length, global_max_length);
 	std::pair<double, double> span = histogram->front().first;
