@@ -11,7 +11,7 @@
 #include <cassert>  // debug
 #include <chrono>
 
-//#include <scorep/SCOREP_User.h> //optimization
+#include <scorep/SCOREP_User.h> //optimization
 
 
 class CommunicationPatterns {    
@@ -40,12 +40,12 @@ public:
         std::function<A_parameter(const DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
     )
     {
-        //SCOREP_USER_REGION_DEFINE( region_handle_CollectQuestions )
-        //SCOREP_USER_REGION_DEFINE( region_handle_DistributeNumberOfQuestions )
-        //SCOREP_USER_REGION_DEFINE( region_handle_DistributeQuestions )
-        //SCOREP_USER_REGION_DEFINE( region_handle_SendBackAnswers )
-        //SCOREP_USER_REGION_DEFINE( region_handle_ComputeAnswers )
-        //SCOREP_USER_REGION_DEFINE( region_handle_SetAnswers )
+        SCOREP_USER_REGION_DEFINE( region_handle_CollectQuestions )
+        SCOREP_USER_REGION_DEFINE( region_handle_DistributeNumberOfQuestions )
+        SCOREP_USER_REGION_DEFINE( region_handle_DistributeQuestions )
+        SCOREP_USER_REGION_DEFINE( region_handle_SendBackAnswers )
+        SCOREP_USER_REGION_DEFINE( region_handle_ComputeAnswers )
+        SCOREP_USER_REGION_DEFINE( region_handle_SetAnswers )
 
         const int my_rank = MPIWrapper::get_my_rank();
         const int number_ranks = MPIWrapper::get_number_ranks();
@@ -53,17 +53,17 @@ public:
         
 
     // Collect Questions and create Questioners structure
-	//SCOREP_USER_REGION_BEGIN(region_handle_CollectQuestions, "CollectQuestions",SCOREP_USER_REGION_TYPE_COMMON)
+	SCOREP_USER_REGION_BEGIN(region_handle_CollectQuestions, "CollectQuestions",SCOREP_USER_REGION_TYPE_COMMON)
         auto questioner_structure = std::make_unique<NodeToNodeQuestionStructure<Q_parameter,A_parameter>>();
         for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
         {
             questioner_structure->addQuestionsFromOneNodeToSend(generateAddressees(graph,node_local_ind),node_local_ind);
         }
         questioner_structure->finalizeAddingQuestionsToSend();
-	//SCOREP_USER_REGION_END(region_handle_CollectQuestions)      
+	SCOREP_USER_REGION_END(region_handle_CollectQuestions)      
                 
     // Distribute number of questions to each rank
-	//SCOREP_USER_REGION_BEGIN(region_handle_DistributeNumberOfQuestions, "DistributeNumberOfQuestions",SCOREP_USER_REGION_TYPE_COMMON)
+	SCOREP_USER_REGION_BEGIN(region_handle_DistributeNumberOfQuestions, "DistributeNumberOfQuestions",SCOREP_USER_REGION_TYPE_COMMON)
         std::vector<int>& send_ranks_to_nbrOfQuestions = questioner_structure->get_adressee_ranks_to_nbrOfQuestions();
         std::vector<int> global_ranks_to_nbrOfQuestions(number_ranks*number_ranks);    
         std::vector<int> destCounts_ranks_to_nbrOfQuestions(number_ranks,number_ranks);
@@ -74,10 +74,10 @@ public:
         }
         MPIWrapper::all_gatherv<int>(send_ranks_to_nbrOfQuestions.data(), number_ranks,
                                     global_ranks_to_nbrOfQuestions.data(), destCounts_ranks_to_nbrOfQuestions.data(), displ_ranks_to_nbrOfQuestions.data(), MPI_INT);
-	//SCOREP_USER_REGION_END(region_handle_DistributeNumberOfQuestions)
+	SCOREP_USER_REGION_END(region_handle_DistributeNumberOfQuestions)
         
     // Distribute questions to each rank
-	//SCOREP_USER_REGION_BEGIN(region_handle_DistributeQuestions, "DistributeQuestions",SCOREP_USER_REGION_TYPE_COMMON)
+	SCOREP_USER_REGION_BEGIN(region_handle_DistributeQuestions, "DistributeQuestions",SCOREP_USER_REGION_TYPE_COMMON)
         std::vector<int> recv_ranks_to_nbrOfQuestions(number_ranks);
         for(int rank=0;rank<recv_ranks_to_nbrOfQuestions.size();rank++)
         {
@@ -110,7 +110,7 @@ public:
                                             my_rank_total_question_parameters.data(),
                                             recv_ranks_to_nbrOfQuestions.data(), displ_recv_ranks_to_nbrOfQuestions.data(),MPI_Q_parameter,rank);
         }
-	//SCOREP_USER_REGION_END(region_handle_DistributeQuestions)
+	SCOREP_USER_REGION_END(region_handle_DistributeQuestions)
 
     // Set questions to be answered to adressees questioner structure
         NodeToNodeQuestionStructure<Q_parameter,A_parameter> adressee_structure;
@@ -118,13 +118,13 @@ public:
                                                 recv_ranks_to_nbrOfQuestions,displ_recv_ranks_to_nbrOfQuestions);
          
     // Compute the answers to questions
-	//SCOREP_USER_REGION_BEGIN(region_handle_ComputeAnswers, "ComputeAnswers",SCOREP_USER_REGION_TYPE_COMMON)
+	SCOREP_USER_REGION_BEGIN(region_handle_ComputeAnswers, "ComputeAnswers",SCOREP_USER_REGION_TYPE_COMMON)
         adressee_structure.computeAnswersToQuestions(graph,generateAnswers);
-	//SCOREP_USER_REGION_END(region_handle_ComputeAnswers)
+	SCOREP_USER_REGION_END(region_handle_ComputeAnswers)
 
         
     // Send answers back to questioners
-	//SCOREP_USER_REGION_BEGIN(region_handle_SendBackAnswers, "SendBackAnswers",SCOREP_USER_REGION_TYPE_COMMON)
+	SCOREP_USER_REGION_BEGIN(region_handle_SendBackAnswers, "SendBackAnswers",SCOREP_USER_REGION_TYPE_COMMON)
         std::vector<int>& send_ranks_to_nbrOfAnswers =  questioner_structure->get_adressee_ranks_to_nbrOfQuestions();
         std::vector<int> displ_send_ranks_to_nbrOfAnswers(number_ranks,0);
         for(int index = 1;index<displ_send_ranks_to_nbrOfAnswers.size();index++)
@@ -147,13 +147,13 @@ public:
                                             my_rank_total_answer_parameters.data(),
                                             send_ranks_to_nbrOfAnswers.data(), displ_send_ranks_to_nbrOfAnswers.data(),MPI_A_parameter,rank);
         }
-	//SCOREP_USER_REGION_END(region_handle_SendBackAnswers)
+	SCOREP_USER_REGION_END(region_handle_SendBackAnswers)
         
     // Set answers questioner structure
-	//SCOREP_USER_REGION_BEGIN(region_handle_SetAnswers, "SetAnswers",SCOREP_USER_REGION_TYPE_COMMON)
+	SCOREP_USER_REGION_BEGIN(region_handle_SetAnswers, "SetAnswers",SCOREP_USER_REGION_TYPE_COMMON)
         questioner_structure->setAnswers(my_rank_total_answer_parameters,send_ranks_to_nbrOfAnswers,
                                         displ_send_ranks_to_nbrOfAnswers);
-	//SCOREP_USER_REGION_END(region_handle_SetAnswers)
+	SCOREP_USER_REGION_END(region_handle_SetAnswers)
         
         return std::move(questioner_structure);
     };
@@ -252,11 +252,11 @@ private:
         int root
     )
     {
-        //SCOREP_USER_REGION_DEFINE( region_handle_GenAndTransformData )
-        //SCOREP_USER_REGION_DEFINE( region_handle_GatherDataItems )
-        //SCOREP_USER_REGION_DEFINE( region_handle_GatherInnerSizeofElements )
-        //SCOREP_USER_REGION_DEFINE( region_handle_GatherDATAElements )
-        //SCOREP_USER_REGION_DEFINE( region_handle_ReorganizeDATA )
+        SCOREP_USER_REGION_DEFINE( region_handle_GenAndTransformData )
+        SCOREP_USER_REGION_DEFINE( region_handle_GatherDataItems )
+        SCOREP_USER_REGION_DEFINE( region_handle_GatherInnerSizeofElements )
+        SCOREP_USER_REGION_DEFINE( region_handle_GatherDATAElements )
+        SCOREP_USER_REGION_DEFINE( region_handle_ReorganizeDATA )
         
 
         const int my_rank = MPIWrapper::get_my_rank();
@@ -264,7 +264,7 @@ private:
         int data_target_size = (root==-1 || root==my_rank)?number_ranks:0;
         
         //Generate and transform data
-	    //SCOREP_USER_REGION_BEGIN(region_handle_GenAndTransformData, "GenAndTransformData", SCOREP_USER_REGION_TYPE_COMMON)
+	    SCOREP_USER_REGION_BEGIN(region_handle_GenAndTransformData, "GenAndTransformData", SCOREP_USER_REGION_TYPE_COMMON)
         std::unique_ptr<std::vector<std::pair<DATA,int>>> data = getData(dg);
         int local_number_data = data->size();
         std::vector<int> data_inner_size(local_number_data);
@@ -278,10 +278,10 @@ private:
                             local_DATA_Elements.insert(local_DATA_Elements.end(),vec.begin(),vec.end());
                         });
         int local_DATA_Elements_size = local_DATA_Elements.size();
-	    //SCOREP_USER_REGION_END(region_handle_GenAndTransformData)
+	    SCOREP_USER_REGION_END(region_handle_GenAndTransformData)
         
         //Gather number of DATA items
-	    //SCOREP_USER_REGION_BEGIN(region_handle_GatherDataItems, "GatherDataItems",SCOREP_USER_REGION_TYPE_COMMON)
+	    SCOREP_USER_REGION_BEGIN(region_handle_GatherDataItems, "GatherDataItems",SCOREP_USER_REGION_TYPE_COMMON)
         std::vector<int> global_local_number_data(data_target_size);
         std::vector<int> destCountNbr(data_target_size,1);
         std::vector<int> displsNbr(data_target_size,0);
@@ -292,10 +292,10 @@ private:
         }
         sizesGatherMethod(&local_number_data,1,global_local_number_data.data(),destCountNbr.data(),
                         displsNbr.data(),root);
-	    //SCOREP_USER_REGION_END(region_handle_GatherDataItems)
+	    SCOREP_USER_REGION_END(region_handle_GatherDataItems)
         
         //Gather inner size of data elements
-	    //SCOREP_USER_REGION_BEGIN(region_handle_GatherInnerSizeofElements, "GatherInnerSizeofElements",SCOREP_USER_REGION_TYPE_COMMON)
+	    SCOREP_USER_REGION_BEGIN(region_handle_GatherInnerSizeofElements, "GatherInnerSizeofElements",SCOREP_USER_REGION_TYPE_COMMON)
         std::vector<int> global_data_inner_size;
         std::vector<int> destCountInnerNbr(data_target_size);
         std::vector<int> displsInnerNbr(data_target_size,0);
@@ -310,10 +310,10 @@ private:
         }
         sizesGatherMethod(data_inner_size.data(),local_number_data,global_data_inner_size.data(),
                         destCountInnerNbr.data(),displsInnerNbr.data(),root);
-	    //SCOREP_USER_REGION_END(region_handle_GatherInnerSizeofElements)
+	    SCOREP_USER_REGION_END(region_handle_GatherInnerSizeofElements)
         
         //Gather DATA_Elements
-	    //SCOREP_USER_REGION_BEGIN(region_handle_GatherDATAElements, "GatherDATAElements",SCOREP_USER_REGION_TYPE_COMMON)
+	    SCOREP_USER_REGION_BEGIN(region_handle_GatherDATAElements, "GatherDATAElements",SCOREP_USER_REGION_TYPE_COMMON)
         std::vector<DATA_Element> global_DATA_Elements;
         std::vector<int> destCountDATAElements(data_target_size);
         std::vector<int> displsInnerDATAElements(data_target_size,0);
@@ -335,10 +335,10 @@ private:
         dataGatherMethod(local_DATA_Elements.data(),local_DATA_Elements_size,
                         global_DATA_Elements.data(),destCountDATAElements.data(),
                         displsInnerDATAElements.data(),DATA_Element_datatype,root);
-        //SCOREP_USER_REGION_END(region_handle_GatherDATAElements)
+        SCOREP_USER_REGION_END(region_handle_GatherDATAElements)
 
         //Reorganize DATA
-	    //SCOREP_USER_REGION_BEGIN(region_handle_ReorganizeDATA, "ReorganizeDATA",SCOREP_USER_REGION_TYPE_COMMON)
+	    SCOREP_USER_REGION_BEGIN(region_handle_ReorganizeDATA, "ReorganizeDATA",SCOREP_USER_REGION_TYPE_COMMON)
         auto collectedData = std::make_unique<std::vector<std::vector<DATA>>>();
         if(root==-1 || root==my_rank)
         {
@@ -362,7 +362,7 @@ private:
                 }
             }
         }
-        //SCOREP_USER_REGION_END(region_handle_ReorganizeDATA)
+        SCOREP_USER_REGION_END(region_handle_ReorganizeDATA)
         return std::move(collectedData);
     };
     
