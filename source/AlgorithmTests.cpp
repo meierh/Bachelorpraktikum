@@ -107,7 +107,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 			double absolute_perc_sum_error = std::accumulate(comp.begin()+1,comp.end(),0);
 			double absolute_count_error = comp[0];			
 			double relative_error = absolute_perc_sum_error + absolute_count_error/ (0.5*(motifs_par[0]+motifs_seq[0]));
-			if (true || relative_error > 1e-8) 
+			if (relative_error > 1e-8) 
 			{
 				std::stringstream error_code;
 				error_code<<std::endl<<"par:";
