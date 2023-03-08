@@ -100,6 +100,8 @@ void DistributedGraph::lock_all_rma_windows(){
 		throw error_9;
 	}
 	signal_types_ind_window.window_locked_globally=true;
+	
+	MPIWrapper::barrier();
 }
 
 void DistributedGraph::unlock_all_rma_windows(){
@@ -157,6 +159,8 @@ void DistributedGraph::unlock_all_rma_windows(){
 		throw error_9;
 	}
 	signal_types_ind_window.window_locked_globally=false;
+	
+	MPIWrapper::barrier();
 }
 
 void DistributedGraph::load_nodes(const std::filesystem::path& path) {

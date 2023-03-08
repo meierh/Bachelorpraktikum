@@ -175,12 +175,15 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
     const std::function<std::unique_ptr<HistogramData>(const double, const double)> histogram_creator,
     const unsigned int result_rank) {
 	graph.lock_all_rma_windows();
-	MPIWrapper::barrier();
+	
+	std::chrono::time_point time = std::chrono::high_resolution_clock::now();
+	std::vector<std::chrono::duration<double, std::milli>> times;
+	std::vector<std::string> names;
 
 	// Test function parameters
 	const int my_rank = MPIWrapper::get_my_rank();
-	const int number_of_ranks = MPIWrapper::get_number_ranks();
-	if (result_rank >= number_of_ranks) {
+	const int number_ranks = MPIWrapper::get_number_ranks();
+	if (result_rank >= number_ranks) {
 		throw std::invalid_argument("Bad parameter - result_rank:" + result_rank);
 	}
 	const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
@@ -199,14 +202,6 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 								return std::tuple<std::uint64_t, std::uint64_t, Vec3d>
 										{oEdge.target_rank, oEdge.target_id, source_node_pos};
 							});
-
-/*
-		    for (int i = 0; i < out_edges.size(); i++) {
-			    (*node_position_vec)[i] =
-				std::tie(out_edges[i].target_rank, out_edges[i].target_id, source_node_pos);
-		    }
-*/
-
 		    return std::move(node_position_vec);
 	    };
 	std::function<double(const DistributedGraph& dg, std::uint64_t node_local_ind, Vec3d para)>
@@ -217,6 +212,10 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 	std::unique_ptr<CommunicationPatterns::NodeToNodeQuestionStructure<Vec3d, double>> edge_length_results =
 	    CommunicationPatterns::node_to_node_question<Vec3d, double>(
 		graph, MPIWrapper::MPI_Vec3d, transfer_node_position, MPI_DOUBLE, compute_edge_length);
+		
+    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    names.push_back("CompLocalEdgeLength");    
+    time = std::chrono::high_resolution_clock::now();
 
 	// Collect edge lengths of edges to local list
 	std::vector<double> edge_lengths;
@@ -225,6 +224,9 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 		    edge_length_results->getAnswersOfQuestionerNode(node_local_ind);
 		edge_lengths.insert(edge_lengths.end(), length_of_all_edges->begin(), length_of_all_edges->end());
 	}
+    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    names.push_back("CollectEdgeLengths ");    
+    time = std::chrono::high_resolution_clock::now();
 
 	// Compute the smallest and largest edge length globally
 	double min_len = std::numeric_limits<double>::max();
@@ -240,6 +242,10 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 	MPIWrapper::all_reduce<double>(&min_len, &global_min_length, 1, MPI_DOUBLE, MPI_MIN);
 	MPIWrapper::all_reduce<double>(&max_len, &global_max_length, 1, MPI_DOUBLE, MPI_MAX);
 	
+    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    names.push_back("ComMinMaxLengthEdge");    
+    time = std::chrono::high_resolution_clock::now();
+	
 	// Create histogram with local edge data
 	std::unique_ptr<HistogramData> histogram = histogram_creator(global_min_length, global_max_length);
 	std::pair<double, double> span = histogram->front().first;
@@ -254,6 +260,9 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 		assert(length < (*histogram)[index].first.second);
 		(*histogram)[index].second++;
 	}
+    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    names.push_back("CreateLocHistogram ");
+    time = std::chrono::high_resolution_clock::now();
 
 	// Reduce local edge count of histogram to global count
 	std::vector<std::uint64_t> histogram_pure_count_src(histogram->size());
@@ -266,6 +275,10 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 	}
 	MPIWrapper::reduce<std::uint64_t>(histogram_pure_count_src.data(), histogram_pure_count_dest.data(),
 					  histogram->size(), MPI_UINT64_T, MPI_SUM, result_rank);
+	
+    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    names.push_back("CreateGlobHistogram");
+    time = std::chrono::high_resolution_clock::now();
 
 	// Reconstruct resulting histogram with global data
 	if (my_rank == result_rank) {
@@ -275,10 +288,40 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 	} else {
 		histogram = std::make_unique<std::vector<std::pair<std::pair<double, double>, std::uint64_t>>>();
 	}
+    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    names.push_back("ReconstrHistogram  ");
+    time = std::chrono::high_resolution_clock::now();
 
-	MPIWrapper::barrier();
 	graph.unlock_all_rma_windows();
+	
+    std::vector<double> time_double;
+    std::for_each(times.cbegin(),times.cend(),
+                  [&](auto time){time_double.push_back(time.count());});
+    
+    std::vector<double> global_avg_times_double(6);
+    MPIWrapper::reduce<double>(time_double.data(),global_avg_times_double.data(),6,MPI_DOUBLE,MPI_SUM,0);
+    std::for_each(global_avg_times_double.begin(),global_avg_times_double.end(),
+                  [=](double& time){time/=number_ranks;});
 
+    
+    std::vector<double> global_max_times_double(6);
+    MPIWrapper::reduce<double>(time_double.data(),global_max_times_double.data(),6,MPI_DOUBLE,MPI_MAX,0);
+    
+    if(my_rank==0)
+    {
+        std::cout.precision(5);
+        std::cout<<"compute_edge_length_histogram"<<std::endl;
+        for(int i=0;i<names.size();i++)
+        {
+            std::cout<<names[i]<<":\tavg:"<<global_avg_times_double[i]<<"\tmax:"<<global_max_times_double[i]<<"   milliseconds"<<std::endl;
+        }
+        double total_avg = std::accumulate(global_avg_times_double.begin(),global_avg_times_double.end(),0);
+        double total_max = std::accumulate(global_max_times_double.begin(),global_max_times_double.end(),0);
+		std::cout<<"Total              "<<":\tavg:"<<total_avg<<"\tmax:"<<total_max<<"   milliseconds"<<std::endl;
+        std::cout<<"----------------------------------"<<std::endl;
+		fflush(stdout);
+    }
+    
 	return std::move(histogram);
 }
 

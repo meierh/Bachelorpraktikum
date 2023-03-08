@@ -28,7 +28,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 		test_result = "AreaConnectivity Error :" + error_code;
 	}
 	if (my_rank == 0)
-		std::cout << test_result << std::endl;
+		std::cout << test_result << std::endl<<std::endl<<std::endl;
 
 	// Test Histogram algorithm parallelization
 	std::unique_ptr<Histogram::HistogramData> histogram_count_bins;
@@ -47,7 +47,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 		test_result = "Count Bins Histogram Error :" + error_code;
 	}
 	if (my_rank == 0)
-		std::cout << test_result << std::endl;
+		std::cout << test_result << std::endl<<std::endl<<std::endl;
 	
 	std::unique_ptr<Histogram::HistogramData> histogram_width_bins;
 	std::unique_ptr<Histogram::HistogramData> histogram_width_bins_sequential;
@@ -64,7 +64,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 		test_result = "Width Bins Histogram Error :" + error_code;
 	}
 	if (my_rank == 0)
-		std::cout << test_result << std::endl;
+		std::cout << test_result << std::endl<<std::endl<<std::endl;
 
 	// Test Modularity algorithm parallelization
 	double modularity_par, modularity_seq;
@@ -87,7 +87,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 		test_result = "Modularity Error :" + error_code;
 	}
 	if (my_rank == 0)
-		std::cout << test_result << std::endl;
+		std::cout << test_result << std::endl<<std::endl<<std::endl;
 
 	// Test Network Motif algorithm parallelization
 	std::array<long double,14> motifs_par, motifs_seq;
@@ -127,7 +127,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 		test_result = "NetworkMotifs Error :" + error_code;
 	}
 	if (my_rank == 0)
-		std::cout << test_result << std::endl;
+		std::cout << test_result << std::endl<<std::endl<<std::endl;
 }
 
 void test_centrality_approx(std::filesystem::path input_directory) {

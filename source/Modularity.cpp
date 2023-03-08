@@ -2,11 +2,14 @@
 
 double Modularity::compute_modularity(DistributedGraph& graph) {
 	graph.lock_all_rma_windows();
-	MPIWrapper::barrier();
 	const int my_rank = MPIWrapper::get_my_rank();
 	const int number_ranks = MPIWrapper::get_number_ranks();
 	const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
 	const std::vector<std::string>& area_names = graph.get_local_area_names();
+	
+	std::chrono::time_point time = std::chrono::high_resolution_clock::now();
+	std::vector<std::chrono::duration<double, std::milli>> times;
+	std::vector<std::string> names;
 
 	// Gather area names to all ranks
 	std::function<std::unique_ptr<std::vector<std::pair<std::string, int>>>(const DistributedGraph&)> get_data =
@@ -23,7 +26,10 @@ double Modularity::compute_modularity(DistributedGraph& graph) {
 		[](std::string area_name) { return std::vector<char>(area_name.cbegin(), area_name.cend()); },
 		[](std::vector<char> area_name_vec) { return std::string(area_name_vec.data(), area_name_vec.size()); },
 		MPI_CHAR);
-
+    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    names.push_back("GatherAreaNamesAll ");
+    time = std::chrono::high_resolution_clock::now();
+		
 	// Create global area name indices
 	std::unordered_map<std::string, std::uint64_t> area_names_map;
 	std::vector<std::string> area_names_list;
@@ -36,6 +42,9 @@ double Modularity::compute_modularity(DistributedGraph& graph) {
 			}
 		}
 	}
+    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    names.push_back("CreateGlobAreaNames");
+    time = std::chrono::high_resolution_clock::now();
 
 	// Compute adjacency results
 	std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>>>(
@@ -88,6 +97,9 @@ double Modularity::compute_modularity(DistributedGraph& graph) {
 	}
 	std::uint64_t global_adjacency_sum = 0;
 	MPIWrapper::all_reduce<std::uint64_t>(&local_adjacency_sum, &global_adjacency_sum, 1, MPI_UINT64_T, MPI_SUM);
+    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    names.push_back("ComputeAdjacency   ");
+    time = std::chrono::high_resolution_clock::now();
 
 	// Compute total number of edges
 	std::uint64_t local_m = number_local_nodes;
@@ -96,7 +108,10 @@ double Modularity::compute_modularity(DistributedGraph& graph) {
 	if (global_m == 0) {
 		throw std::logic_error("Total number of edges must not be zero");
 	}
-
+    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    names.push_back("ComputeTotalEdgeNum");
+    time = std::chrono::high_resolution_clock::now();
+	
 	// Compute in-out degree summation
 	std::vector<std::vector<NodeModularityInfo>> area_globalID_to_node(area_names_list.size());
 	for (std::uint64_t node_localID = 0; node_localID < number_local_nodes; node_localID++) {
@@ -162,9 +177,39 @@ double Modularity::compute_modularity(DistributedGraph& graph) {
 	double global_in_out_degree_node_sum = 0;
 	MPIWrapper::all_reduce<double>(&local_in_out_degree_node_sum, &global_in_out_degree_node_sum, 1, MPI_DOUBLE,
 				       MPI_SUM);
+    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    names.push_back("ComputeInOutDegree ");
+    time = std::chrono::high_resolution_clock::now();
 
-	MPIWrapper::barrier();
 	graph.unlock_all_rma_windows();
+	
+    std::vector<double> time_double;
+    std::for_each(times.cbegin(),times.cend(),
+                  [&](auto time){time_double.push_back(time.count());});
+    
+    std::vector<double> global_avg_times_double(6);
+    MPIWrapper::reduce<double>(time_double.data(),global_avg_times_double.data(),6,MPI_DOUBLE,MPI_SUM,0);
+    std::for_each(global_avg_times_double.begin(),global_avg_times_double.end(),
+                  [=](double& time){time/=number_ranks;});
+
+    
+    std::vector<double> global_max_times_double(6);
+    MPIWrapper::reduce<double>(time_double.data(),global_max_times_double.data(),6,MPI_DOUBLE,MPI_MAX,0);
+    
+    if(my_rank==0)
+    {
+        std::cout.precision(5);
+        std::cout<<"compute_modularity"<<std::endl;
+        for(int i=0;i<names.size();i++)
+        {
+            std::cout<<names[i]<<":\tavg:"<<global_avg_times_double[i]<<"\tmax:"<<global_max_times_double[i]<<"   milliseconds"<<std::endl;
+        }
+        double total_avg = std::accumulate(global_avg_times_double.begin(),global_avg_times_double.end(),0);
+        double total_max = std::accumulate(global_max_times_double.begin(),global_max_times_double.end(),0);
+		std::cout<<"Total              "<<":\tavg:"<<total_avg<<"\tmax:"<<total_max<<"   milliseconds"<<std::endl;
+        std::cout<<"----------------------------------"<<std::endl;
+		fflush(stdout);
+    }
 
 	// Compute modularity of number of edges, global adjacency and global in and out degree sums
 	return (static_cast<double>(global_adjacency_sum) + global_in_out_degree_node_sum) /
