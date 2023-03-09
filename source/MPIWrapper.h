@@ -123,7 +123,31 @@ class MPIWrapper {
 		MPI_Type_commit(&MPI_AreaConnectivityInfo);
 		
 		//MPI Type for threeMotifStructure
-		MPI_Type_contiguous(7,MPI_UINT64_T,&MPI_threeMotifStructure);
+		typedef struct {
+			std::uint64_t node_3_rank;
+			std::uint64_t node_3_local;
+			std::uint16_t motifTypeBitArray=0;
+		} threeMotifStructure;
+		threeMotifStructure motif;
+		int         numberofValuesPerStructElement3[3] = {1,1,1};
+		MPI_Aint    displacementOfStructElements3[3];
+		MPI_Aint    base_address3;
+		MPI_Get_address(&motif, &base_address3);
+		MPI_Get_address(&motif.node_3_rank, &displacementOfStructElements3[0]);
+		MPI_Get_address(&motif.node_3_local,   &displacementOfStructElements3[1]);
+		MPI_Get_address(&motif.motifTypeBitArray, 	&displacementOfStructElements3[2]);
+		displacementOfStructElements3[0] = MPI_Aint_diff(displacementOfStructElements3[0], base_address3);
+		displacementOfStructElements3[1] = MPI_Aint_diff(displacementOfStructElements3[1], base_address3);
+		displacementOfStructElements3[2] = MPI_Aint_diff(displacementOfStructElements3[2], base_address3);
+		MPI_Datatype typesOfStructElements3[3] = {MPI_UINT64_T,MPI_UINT64_T,MPI_UINT16_T};
+		MPI_Type_create_struct
+		(
+			3,
+			numberofValuesPerStructElement3,
+			displacementOfStructElements3,
+			typesOfStructElements3,
+			&MPI_threeMotifStructure
+		);
 		MPI_Type_commit(&MPI_threeMotifStructure);
 		
 		//MPI Type for nodeModularityInfo 
