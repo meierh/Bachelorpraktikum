@@ -13,34 +13,48 @@
 DistributedGraph::DistributedGraph(const std::filesystem::path& path) {
 	const auto my_rank = MPIWrapper::get_my_rank();
 
-	const auto& rank_prefix = std::string("rank_") + std::to_string(my_rank);
-	const auto& positions_file = rank_prefix + "_positions.txt";
-	const auto& in_edges_file = rank_prefix + "_in_edges.txt";
-	const auto& out_edges_file = rank_prefix + "_out_edges.txt";
+	int number_of_digits_ranks = std::to_string(MPIWrapper::get_number_ranks() - 1).length();
+	int number_of_digits_my_rank = std::to_string(my_rank).length();
 
-	const auto& positions = path / positions_file;
-	const auto& in_edges = path / in_edges_file;
-	const auto& out_edges = path / out_edges_file;
+  	// zeros = number_of_ranks - rank (check for possible negativ number ?)
+  	int number_of_zeros = number_of_digits_ranks - number_of_digits_my_rank;
+  	std::string zeros (number_of_zeros, '0');
+	
+	// build the rank prefix for the files
+	const std::string rank_prefix = std::string("rank_") + zeros + std::to_string(my_rank);
+
+	// build the strings for the files
+	const std::string positions_file = rank_prefix + "_positions.txt";
+	const std::string in_network_file = rank_prefix + "_in_network.txt";
+	const std::string out_network_file = rank_prefix + "_out_network.txt";
+
+	// strings for the directory structure (navigate into the right directories)
+	const std::string network_string = "network";
+	const std::string positions_string = "positions";
+
+	// build the new paths for files
+	const std::filesystem::path positions = path / positions_string / positions_file;
+	const std::filesystem::path in_network = path / network_string / in_network_file;
+	const std::filesystem::path out_network = path / network_string / out_network_file;
 
 	if (!std::filesystem::exists(positions)) {
 		std::cout << "The positions for rank " << my_rank << " do not exist:\n" << positions << std::endl;
 		throw 1;
 	}
 
-	if (!std::filesystem::exists(in_edges)) {
-		std::cout << "The in edges for rank " << my_rank << " do not exist:\n" << in_edges << std::endl;
+	if (!std::filesystem::exists(in_network)) {
+		std::cout << "The in edges for rank " << my_rank << " do not exist:\n" << in_network << std::endl;
 		throw 2;
 	}
 
-	if (!std::filesystem::exists(out_edges)) {
-		std::cout << "The out edges for rank " << my_rank << " do not exist:\n" << out_edges << std::endl;
+	if (!std::filesystem::exists(out_network)) {
+		std::cout << "The out edges for rank " << my_rank << " do not exist:\n" << out_network << std::endl;
 		throw 3;
 	}
 	
 	load_nodes(positions);
-	load_in_edges(in_edges);
-	load_out_edges(out_edges);
-	
+	load_in_edges(in_network);
+	load_out_edges(out_network);
 	in_edge_cache.init();
 	out_edge_cache.init();
 }
