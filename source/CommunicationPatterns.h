@@ -34,41 +34,33 @@ public:
     static std::unique_ptr<NodeToNodeQuestionStructure<Q_parameter,A_parameter>> node_to_node_question
     (
         const DistributedGraph& graph,
-        MPI_Datatype MPI_Q_parameter,
-        std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>>(const DistributedGraph& dg,std::uint64_t node_local_ind)> generateAddressees,
-        MPI_Datatype MPI_A_parameter,
-        std::function<A_parameter(const DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
+        const MPI_Datatype MPI_Q_parameter,
+        const std::function<std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>>(const DistributedGraph& dg,std::uint64_t node_local_ind)> generateAddressees,
+        const MPI_Datatype MPI_A_parameter,
+        const std::function<A_parameter(const DistributedGraph& dg,std::uint64_t node_local_ind,Q_parameter para)> generateAnswers
     )
     {
         std::chrono::time_point time = std::chrono::high_resolution_clock::now();
         std::vector<std::chrono::duration<double, std::milli>> times;
         std::vector<std::string> names;
-        //SCOREP_USER_REGION_DEFINE( region_handle_CollectQuestions )
-        //SCOREP_USER_REGION_DEFINE( region_handle_DistributeNumberOfQuestions )
-        //SCOREP_USER_REGION_DEFINE( region_handle_DistributeQuestions )
-        //SCOREP_USER_REGION_DEFINE( region_handle_SendBackAnswers )
-        //SCOREP_USER_REGION_DEFINE( region_handle_ComputeAnswers )
-        //SCOREP_USER_REGION_DEFINE( region_handle_SetAnswers )
         
         const int my_rank = MPIWrapper::get_my_rank();
         const int number_ranks = MPIWrapper::get_number_ranks();
         const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
         
     // Collect Questions and create Questioners structure
-	//SCOREP_USER_REGION_BEGIN(region_handle_CollectQuestions, "CollectQuestions",SCOREP_USER_REGION_TYPE_COMMON)
         auto questioner_structure = std::make_unique<NodeToNodeQuestionStructure<Q_parameter,A_parameter>>();
         for(std::uint64_t node_local_ind=0;node_local_ind<number_local_nodes;node_local_ind++)
         {
             questioner_structure->addQuestionsFromOneNodeToSend(generateAddressees(graph,node_local_ind),node_local_ind);
         }
         questioner_structure->finalizeAddingQuestionsToSend();
-	//SCOREP_USER_REGION_END(region_handle_CollectQuestions)
+
         times.push_back(std::chrono::high_resolution_clock::now()-time);
         names.push_back("CollectQuesti");
         time = std::chrono::high_resolution_clock::now();
                 
     // Distribute number of questions to each rank
-	//SCOREP_USER_REGION_BEGIN(region_handle_DistributeNumberOfQuestions, "DistributeNumberOfQuestions",SCOREP_USER_REGION_TYPE_COMMON)
         std::vector<int>& send_ranks_to_nbrOfQuestions = questioner_structure->get_adressee_ranks_to_nbrOfQuestions();
         std::vector<int> global_ranks_to_nbrOfQuestions(number_ranks*number_ranks);    
         std::vector<int> destCounts_ranks_to_nbrOfQuestions(number_ranks,number_ranks);
@@ -79,13 +71,12 @@ public:
         }
         MPIWrapper::all_gatherv<int>(send_ranks_to_nbrOfQuestions.data(), number_ranks,
                                     global_ranks_to_nbrOfQuestions.data(), destCounts_ranks_to_nbrOfQuestions.data(), displ_ranks_to_nbrOfQuestions.data(), MPI_INT);
-	//SCOREP_USER_REGION_END(region_handle_DistributeNumberOfQuestions)
+        
         times.push_back(std::chrono::high_resolution_clock::now()-time);
         names.push_back("DistrNumQuest");
         time = std::chrono::high_resolution_clock::now();
         
     // Distribute questions to each rank
-	//SCOREP_USER_REGION_BEGIN(region_handle_DistributeQuestions, "DistributeQuestions",SCOREP_USER_REGION_TYPE_COMMON)
         std::vector<int> recv_ranks_to_nbrOfQuestions(number_ranks);
         for(int rank=0;rank<recv_ranks_to_nbrOfQuestions.size();rank++)
         {
@@ -118,7 +109,7 @@ public:
                                             my_rank_total_question_parameters.data(),
                                             recv_ranks_to_nbrOfQuestions.data(), displ_recv_ranks_to_nbrOfQuestions.data(),MPI_Q_parameter,rank);
         }
-	//SCOREP_USER_REGION_END(region_handle_DistributeQuestions)
+        
         times.push_back(std::chrono::high_resolution_clock::now()-time);
         names.push_back("DistribuQuest");
         time = std::chrono::high_resolution_clock::now();
@@ -129,16 +120,13 @@ public:
                                                 recv_ranks_to_nbrOfQuestions,displ_recv_ranks_to_nbrOfQuestions);
          
     // Compute the answers to questions
-	//SCOREP_USER_REGION_BEGIN(region_handle_ComputeAnswers, "ComputeAnswers",SCOREP_USER_REGION_TYPE_COMMON)
         adressee_structure.computeAnswersToQuestions(graph,generateAnswers);
-	//SCOREP_USER_REGION_END(region_handle_ComputeAnswers)
+
         times.push_back(std::chrono::high_resolution_clock::now()-time);
         names.push_back("ComputAnswers");
         time = std::chrono::high_resolution_clock::now();
 
-        
     // Send answers back to questioners
-	//SCOREP_USER_REGION_BEGIN(region_handle_SendBackAnswers, "SendBackAnswers",SCOREP_USER_REGION_TYPE_COMMON)
         std::vector<int>& send_ranks_to_nbrOfAnswers =  questioner_structure->get_adressee_ranks_to_nbrOfQuestions();
         std::vector<int> displ_send_ranks_to_nbrOfAnswers(number_ranks,0);
         for(int index = 1;index<displ_send_ranks_to_nbrOfAnswers.size();index++)
@@ -154,10 +142,8 @@ public:
             std::vector<A_parameter>& answers_for_rank = adressee_structure.get_answers_for_rank(rank);
             
             int count = answers_for_rank.size();        
-            
-            A_parameter* intermed = answers_for_rank.data();
-            
-            MPIWrapper::gatherv<A_parameter>(intermed, count,
+                        
+            MPIWrapper::gatherv<A_parameter>(answers_for_rank.data(), count,
                                             my_rank_total_answer_parameters.data(),
                                             send_ranks_to_nbrOfAnswers.data(), displ_send_ranks_to_nbrOfAnswers.data(),MPI_A_parameter,rank);
         }
@@ -462,20 +448,20 @@ public:
     //Functions for use on questioner rank side
         void addQuestionsFromOneNodeToSend
         (
-            std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>> list_of_adressees_and_parameter,
-            std::uint64_t questioner
+            const std::unique_ptr<std::vector<std::tuple<std::uint64_t,std::uint64_t,Q_parameter>>> list_of_adressees_and_parameter,
+            const std::uint64_t questioner
         )
         {
             auto& ref_list_of_adressees_and_parameter = *list_of_adressees_and_parameter;
             assert(structureStatus==Empty || structureStatus==PrepareQuestionsToSend);
             
-            for(auto [target_rank,target_local_node,Q_parameter_struct] : ref_list_of_adressees_and_parameter)
+        // Distribute questions to list of questions for each rank
+            for(const auto [target_rank,target_local_node,Q_parameter_struct] : ref_list_of_adressees_and_parameter)
             {
                 assert(target_rank<MPIWrapper::get_number_ranks());
                 const auto rank_to_index = rank_to_outerIndex.find(target_rank);
-                //std::cout<<"target_rank:"<<target_rank<<"  target_local_node:"<<target_local_node<<std::endl;
                 if(rank_to_index != rank_to_outerIndex.end())
-                // If rank was already encoutered due to other outEdge 
+            // If rank was already encoutered due to other question 
                 {
                     std::uint64_t outerIndex = rank_to_index->second;
                     
@@ -500,6 +486,7 @@ public:
                     questioner_node_to_outerIndex_and_innerIndex.insert(doublePair);
                 }
                 else
+            // If rank was not already encoutered and must be established new 
                 {
                     std::uint64_t outerIndex = nodes_to_ask_question.size();
                     std::uint64_t innerIndex = 0;
@@ -515,26 +502,6 @@ public:
                     rank_to_outerIndex.insert({target_rank,outerIndex});
                 }
             }
-            
-            /*
-            for(auto keyValue = questioner_node_to_outerIndex_and_innerIndex.begin();
-                keyValue!=questioner_node_to_outerIndex_and_innerIndex.end();
-                keyValue++)
-            {
-                std::uint64_t questioner = keyValue->first;
-                std::uint64_t outerIndex = keyValue->second.first;
-                assert(outerIndex>=0);
-                assert(outerIndex<nodes_to_ask_question.size());
-                assert(outerIndex<nodes_that_ask_the_question.size());
-                assert(outerIndex<question_parameters.size());
-                std::uint64_t innerIndex = keyValue->second.second;
-                assert(innerIndex>=0);
-                assert(innerIndex<nodes_to_ask_question[outerIndex].size());
-                assert(innerIndex<nodes_that_ask_the_question[outerIndex].size());
-                assert(questioner==nodes_that_ask_the_question[outerIndex][innerIndex]);
-                assert(innerIndex<question_parameters[outerIndex].size());
-            }
-            */
             structureStatus = PrepareQuestionsToSend;
         };
         void finalizeAddingQuestionsToSend()
@@ -553,7 +520,6 @@ public:
                 list_index_to_adressee_rank[iter->second] = iter->first;
             }
 
-            
             addressee_ranks_to_nbrOfQuestions.resize(number_ranks,0);
             for(int index=0;index<list_index_to_adressee_rank.size();index++)
             {
@@ -562,40 +528,19 @@ public:
                 addressee_ranks_to_nbrOfQuestions[rank] = nodes_to_ask_question[index].size();
             }
 
-            
             structureStatus = ClosedQuestionsPreparation;
-            
-			/*
-            for(auto keyValue = questioner_node_to_outerIndex_and_innerIndex.begin();
-                keyValue!=questioner_node_to_outerIndex_and_innerIndex.end();
-                keyValue++)
-            {
-                std::uint64_t questioner = keyValue->first;
-                std::uint64_t outerIndex = keyValue->second.first;
-                assert(outerIndex>=0);
-                assert(outerIndex<nodes_to_ask_question.size());
-                assert(outerIndex<list_index_to_adressee_rank.size());
-                assert(outerIndex<nodes_that_ask_the_question.size());
-                assert(outerIndex<question_parameters.size());
-                std::uint64_t innerIndex = keyValue->second.second;
-                assert(innerIndex>=0);
-                assert(innerIndex<nodes_to_ask_question[outerIndex].size());
-                assert(innerIndex<nodes_that_ask_the_question[outerIndex].size());
-                assert(questioner==nodes_that_ask_the_question[outerIndex][innerIndex]);
-                assert(innerIndex<question_parameters[outerIndex].size());
-            }
-			*/
         };
 
-    //Funktions for use on answerer rank side
+    //Functions for use on answerer rank side
         void setQuestionsReceived
         (
-            std::vector<std::uint64_t>& total_nodes_to_ask_question,
-            std::vector<Q_parameter>& total_question_parameters,
-            std::vector<int>& rank_size,
-            std::vector<int>& rank_displ
+            const std::vector<std::uint64_t>& total_nodes_to_ask_question,
+            const std::vector<Q_parameter>& total_question_parameters,
+            const std::vector<int>& rank_size,
+            const std::vector<int>& rank_displ
         )
         {
+        // Distribute questions parameters and adressees to lists in the NodeToNodeQuestionStructure
             assert(rank_size.size()==rank_displ.size());
             for(int rank=0;rank<rank_size.size();rank++)
             {
@@ -609,12 +554,15 @@ public:
                     assert(rank_displ[rank]<total_nodes_to_ask_question.size() && rank_displ[rank]>=0);
                     
                     list_index_to_adressee_rank.push_back(rank);
+                    
+                // Distribute adressee nodes in the NodeToNodeQuestionStructure
                     nodes_to_ask_question.push_back({});
                     nodes_to_ask_question.back().resize(nbr_of_questions);
                     assert(nodes_to_ask_question.back().size()==nbr_of_questions);
                     assert(rank_displ[rank]>=0 && rank_displ[rank]<total_nodes_to_ask_question.size());
                     std::memcpy(nodes_to_ask_question.back().data(),&total_nodes_to_ask_question[rank_displ[rank]],                        nbr_of_questions*sizeof(std::uint64_t));
                     
+                // Distribute question parameters in the NodeToNodeQuestionStructure
                     question_parameters.push_back({});
                     question_parameters.back().resize(nbr_of_questions);
                     assert(outerIndex<question_parameters.size());
@@ -625,7 +573,6 @@ public:
                     addressee_ranks_to_nbrOfQuestions.push_back(nbr_of_questions);
                 }
             }
-            //throw std::string("1544");
         };
         void computeAnswersToQuestions
         (
