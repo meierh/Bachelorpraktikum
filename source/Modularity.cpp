@@ -26,6 +26,7 @@ double Modularity::compute_modularity(DistributedGraph& graph) {
 		[](std::string area_name) { return std::vector<char>(area_name.cbegin(), area_name.cend()); },
 		[](std::vector<char> area_name_vec) { return std::string(area_name_vec.data(), area_name_vec.size()); },
 		MPI_CHAR);
+		
     times.push_back(std::chrono::high_resolution_clock::now()-time);
     names.push_back("GatherAreaNamesAll ");
     time = std::chrono::high_resolution_clock::now();
@@ -42,6 +43,7 @@ double Modularity::compute_modularity(DistributedGraph& graph) {
 			}
 		}
 	}
+	
     times.push_back(std::chrono::high_resolution_clock::now()-time);
     names.push_back("CreateGlobAreaNames");
     time = std::chrono::high_resolution_clock::now();

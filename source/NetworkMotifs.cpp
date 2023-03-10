@@ -65,7 +65,7 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
                     {
                         assert(entry->second<adjacent_nodes_list.size());
                         std::pair<bool,bool>& edgesOutIn = adjacent_nodes_list[entry->second].second;
-                        assert(edgesOutIn.first && !edgesOutIn.second);
+                        assert(edgesOutIn.first);
                         edgesOutIn.second=true;
                     }
                 }
@@ -85,11 +85,7 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
                     std::pair<bool,bool> edgesOutIn_to_node_Inner = adjacent_nodes_list[j].second;
 
                     threeMotifStructure motifStruc;
-                    //motifStruc.node_1_rank = my_rank;
-                    //motifStruc.node_1_local = node_local_ind;
                     
-                    //motifStruc.node_2_rank = node_Outer.first;
-                    //motifStruc.node_2_local = node_Outer.second;
                     bool node_2_exists_outEdge = edgesOutIn_to_node_Outer.first;
                     bool node_2_exists_inEdge  = edgesOutIn_to_node_Outer.second;                        
                     
@@ -164,14 +160,12 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
             {
                 std::pair<std::uint64_t,std::uint64_t> node_key(oEdge.target_rank,oEdge.target_id);
                 std::pair<bool,bool>& value = adjacent_nodes[node_key];
-                assert(!value.first);
                 value.first = true;
             }
             for(const InEdge& iEdge : iEdges)
             {
                 std::pair<std::uint64_t,std::uint64_t> node_key(iEdge.source_rank,iEdge.source_id);
                 std::pair<bool,bool>& value = adjacent_nodes[node_key];
-                assert(!value.second);
                 value.second = true;
             }
             
