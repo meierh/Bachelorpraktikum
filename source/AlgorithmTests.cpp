@@ -6,14 +6,19 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 	DistributedGraph dg(input_directory);
 	MPIWrapper::barrier();
 	std::string test_result;
+	std::chrono::time_point time = std::chrono::high_resolution_clock::now();
 
 	// Test AreaConnectivity algorithm parallelization
 	std::unique_ptr<AreaConnectivity::AreaConnecMap> area_connect_parallel;
 	std::unique_ptr<AreaConnectivity::AreaConnecMap> area_connect_sequential_helge;
 	std::unique_ptr<AreaConnectivity::AreaConnecMap> area_connect_sequential;
 	try {
-		area_connect_parallel = AreaConnectivity::compute_area_connectivity_strength(dg); // No runtime errors
 		MPIWrapper::barrier();
+		time = std::chrono::high_resolution_clock::now();
+		area_connect_parallel = AreaConnectivity::compute_area_connectivity_strength(dg);
+		MPIWrapper::barrier();
+		std::chrono::duration<double, std::milli> duration(std::chrono::high_resolution_clock::now()-time);
+
 		area_connect_sequential_helge =
 		    AreaConnectivity::area_connectivity_strength_sequential_helge(dg); // Runtime errors
 		MPIWrapper::barrier();
@@ -23,7 +28,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 		compare_area_connec_map(*area_connect_parallel, *area_connect_sequential_helge);
 		compare_area_connec_map(*area_connect_sequential_helge, *area_connect_sequential);
 
-		test_result = "AreaConnectivity test completed";
+		test_result = "AreaConnectivity test completed in "+std::to_string(duration.count())+" milliseconds";
 	} catch (std::string error_code) {
 		test_result = "AreaConnectivity Error :" + error_code;
 	}
@@ -35,14 +40,18 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 	std::unique_ptr<Histogram::HistogramData> histogram_count_bins_sequential;
 	std::uint64_t bin_count = 50;
 	try {
+		MPIWrapper::barrier();
+		time = std::chrono::high_resolution_clock::now();
 		histogram_count_bins = Histogram::compute_edge_length_histogram_const_bin_count(dg, bin_count);
 		MPIWrapper::barrier();
+		std::chrono::duration<double, std::milli> duration(std::chrono::high_resolution_clock::now()-time);
+
 		histogram_count_bins_sequential =
 		    Histogram::compute_edge_length_histogram_const_bin_count_sequential(dg, bin_count);
 		MPIWrapper::barrier();
 		compare_edge_length_histogram(*histogram_count_bins, *histogram_count_bins_sequential, 1e-8);
 
-		test_result = "Count Bins Histogram test completed";
+		test_result = "Count Bins Histogram test completed in "+std::to_string(duration.count())+" milliseconds";
 	} catch (std::string error_code) {
 		test_result = "Count Bins Histogram Error :" + error_code;
 	}
@@ -53,13 +62,17 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 	std::unique_ptr<Histogram::HistogramData> histogram_width_bins_sequential;
 	double bin_width = 1;
 	try {
+		MPIWrapper::barrier();
+		time = std::chrono::high_resolution_clock::now();
 		histogram_width_bins = Histogram::compute_edge_length_histogram_const_bin_width(dg, bin_width);
 		MPIWrapper::barrier();
+		std::chrono::duration<double, std::milli> duration(std::chrono::high_resolution_clock::now()-time);
+
 		histogram_width_bins_sequential =
 		    Histogram::compute_edge_length_histogram_const_bin_width_sequential(dg, bin_width);
 		compare_edge_length_histogram(*histogram_width_bins, *histogram_width_bins_sequential, 1e-8);
 
-		test_result = "Width Bins Histogram test completed";
+		test_result = "Width Bins Histogram test completed "+std::to_string(duration.count())+" milliseconds";
 	} catch (std::string error_code) {
 		test_result = "Width Bins Histogram Error :" + error_code;
 	}
@@ -69,8 +82,12 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 	// Test Modularity algorithm parallelization
 	double modularity_par, modularity_seq;
 	try {
+		MPIWrapper::barrier();
+		time = std::chrono::high_resolution_clock::now();
 		modularity_par = Modularity::compute_modularity(dg);
 		MPIWrapper::barrier();
+		std::chrono::duration<double, std::milli> duration(std::chrono::high_resolution_clock::now()-time);
+
 		modularity_seq = Modularity::compute_modularity_sequential(dg);
 		MPIWrapper::barrier();
 		double absolute_error = std::abs(modularity_par - modularity_seq);
@@ -82,7 +99,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 			throw error_code.str();
 		}
 
-		test_result = "Modularity test completed";
+		test_result = "Modularity test completed "+std::to_string(duration.count())+" milliseconds";
 	} catch (std::string error_code) {
 		test_result = "Modularity Error :" + error_code;
 	}
@@ -92,8 +109,12 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 	// Test Network Motif algorithm parallelization
 	std::array<long double,14> motifs_par, motifs_seq;
 	try {
+		MPIWrapper::barrier();
+		time = std::chrono::high_resolution_clock::now();
 		motifs_par = NetworkMotifs::compute_network_TripleMotifs(dg);
 		MPIWrapper::barrier();
+		std::chrono::duration<double, std::milli> duration(std::chrono::high_resolution_clock::now()-time);
+
 		motifs_seq = NetworkMotifs::compute_network_TripleMotifs_SingleProc(dg);
 		MPIWrapper::barrier();
 
@@ -122,7 +143,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 			}
 		}
 
-		test_result = "NetworkMotifs test completed";
+		test_result = "NetworkMotifs test completed "+std::to_string(duration.count())+" milliseconds";
 	} catch (std::string error_code) {
 		test_result = "NetworkMotifs Error :" + error_code;
 	}
