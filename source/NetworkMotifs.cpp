@@ -44,9 +44,11 @@ std::array<long double,14> NetworkMotifs::compute_network_TripleMotifs
                 if(!(oEdge.target_rank==my_rank && oEdge.target_id==node_local_ind))
                 {
                     std::pair<std::pair<std::uint64_t,std::uint64_t>,std::pair<bool,bool>>node_information(std::pair<std::uint64_t,std::uint64_t>(oEdge.target_rank,oEdge.target_id),std::pair<bool,bool>(true,false));
-                    adjacent_nodes_list.push_back(node_information);
-                    assert(adjacent_nodes_to_index.find(node_information.first)==adjacent_nodes_to_index.end());
-                    adjacent_nodes_to_index[node_information.first] = adjacent_nodes_list.size()-1;
+                    if(adjacent_nodes_to_index.find(node_information.first)==adjacent_nodes_to_index.end())
+                    {
+                        adjacent_nodes_list.push_back(node_information);
+                        adjacent_nodes_to_index[node_information.first] = adjacent_nodes_list.size()-1;
+                    }
                 }
             }
             for(const InEdge& iEdge : iEdges)
