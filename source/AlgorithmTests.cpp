@@ -1,7 +1,7 @@
 #include "AlgorithmTests.h"
 #include "CentralityApprox.cpp" // solved linking problem (maybe needed because file name != class name (?))
 
-void test_algorithm_parallelization(std::filesystem::path input_directory) {
+void AlgorithmTests::test_algorithm_parallelization(std::filesystem::path input_directory) {
 	const int my_rank = MPIWrapper::get_my_rank();
 	DistributedGraph dg(input_directory);
 	MPIWrapper::barrier();
@@ -159,7 +159,7 @@ void test_algorithm_parallelization(std::filesystem::path input_directory) {
 		std::cout << test_result << std::endl<<std::endl<<std::endl;
 }
 
-void test_centrality_approx(std::filesystem::path input_directory) {
+void AlgorithmTests::test_centrality_approx(std::filesystem::path input_directory) {
 	const int my_rank = MPIWrapper::get_my_rank();
 	DistributedGraph dg(input_directory);
 	MPIWrapper::barrier();
@@ -235,7 +235,93 @@ void test_centrality_approx(std::filesystem::path input_directory) {
 		std::cout << test_result << std::endl;
 }
 
-void compare_area_connec_map(const AreaConnectivity::AreaConnecMap& map_par,
+void AlgorithmTests::check_graph_property(std::filesystem::path input_directory) {
+	DistributedGraph dg(input_directory);
+	MPIWrapper::barrier();
+	const int my_rank = MPIWrapper::get_my_rank();
+	const int result_rank = 0;
+	int number_ranks = MPIWrapper::get_number_ranks();
+    	std::uint64_t number_local_nodes = dg.get_number_local_nodes();
+	std::vector<std::uint64_t> number_nodes_of_ranks(number_ranks);
+    	MPIWrapper::gather<uint64_t>(&number_local_nodes, number_nodes_of_ranks.data(), 1, MPI_UINT64_T, result_rank);
+	MPIWrapper::barrier();
+	
+	// Check if total edge numbers equal
+	std::cout << "Check if total edge numbers equal:" << std::endl;
+	uint64_t total_number_out_edges = OutEdgeCounter::count_out_edges(dg);
+	uint64_t total_number_in_edges = InEdgeCounter::count_in_edges(dg);
+	if(my_rank == result_rank) {
+		std::cout << "\ttotal_number_out_edges = " << total_number_out_edges << std::endl;
+		std::cout << "\ttotal_number_in_edges = " << total_number_in_edges << std::endl;
+		if(total_number_out_edges != total_number_in_edges) 
+			std::cout << "\t-> Error: Total edge numbers do not equal" << std::endl;
+	}
+
+
+	// Check if there are nodes with self-referencing edges
+	if(my_rank == result_rank) std::cout << "Check if there are nodes with self-referencing edges:" << std::endl;  
+        bool passed = true;
+	for(std::uint64_t node = 0; node < number_local_nodes; node++) {
+		auto out_edges = dg.get_out_edges(my_rank, node);
+		for(auto out_edge : out_edges){
+			//std::cout << "edge: " << my_rank << "," << node << " -> " << out_edge.target_rank << "," << out_edge.target_id << std::endl;
+			if(out_edge.target_rank == my_rank && out_edge.target_id == node) {
+				std::cout << "\tError: Node with self referencing out_edge found: node(" << my_rank << ", " << node << ")" << std::endl;
+			}
+		}
+		auto in_edges = dg.get_in_edges(my_rank, node);
+		for(auto in_edge : in_edges){
+			if(in_edge.source_rank == my_rank && in_edge.source_id == node) {
+				std::cout << "\tError: Node with self referencing in_edge found: node(" << my_rank << ", " << node << ")" << std::endl;
+			}
+		}
+	}
+	MPIWrapper::barrier();
+        if(my_rank == result_rank) std::cout << std::endl;
+
+	
+	// Check if there are edge duplicates
+	if(my_rank == result_rank) 
+		std::cout << "Check if there are edge duplicates:" << std::endl; 
+
+	std::unordered_map<std::pair<std::pair<std::uint64_t, std::uint64_t>, std::pair<std::uint64_t, std::uint64_t>>, int, StdDoublePair_hash> out_edge_count;
+	std::unordered_map<std::pair<std::pair<std::uint64_t, std::uint64_t>, std::pair<std::uint64_t, std::uint64_t>>, int, StdDoublePair_hash> in_edge_count;
+	
+	for(std::uint64_t node = 0; node < number_local_nodes; node++) {
+		
+		const std::vector<OutEdge>& out_edges = dg.get_out_edges(my_rank, node);
+		const std::vector<InEdge>& in_edges = dg.get_in_edges(my_rank, node);
+		
+		for(const OutEdge& out_edge : out_edges) {
+			std::pair<std::uint64_t, std::uint64_t> p1(my_rank, node);
+			std::pair<std::uint64_t, std::uint64_t> p2(out_edge.target_rank, out_edge.target_id);
+			std::pair<std::pair<std::uint64_t, std::uint64_t>, std::pair<std::uint64_t, std::uint64_t>> key = {p1, p2};
+			int& value = out_edge_count[key];
+			if(value != 0){
+				std::cout << "\tError: Out-edge duplicate found: (" << my_rank << ", " << node << ") " << "---> (" 
+						<< out_edge.target_rank << ", " << out_edge.target_id << ")" << std::endl;
+			}
+			value++;
+		}
+		
+		for(const InEdge& in_edge : in_edges) {
+			std::pair<std::uint64_t, std::uint64_t> p1(my_rank, node);
+			std::pair<std::uint64_t, std::uint64_t> p2(in_edge.source_rank, in_edge.source_id);
+			std::pair<std::pair<std::uint64_t, std::uint64_t>, std::pair<std::uint64_t, std::uint64_t>> key = {p1, p2};
+			int& value = in_edge_count[key];
+			if(value != 0){
+				std::cout << "\tError: In-edge duplicate found: (" << my_rank << ", " << node << ") " << "---> (" 
+						<< in_edge.source_rank << ", " << in_edge.source_id << ")" << std::endl;
+			}
+			value++;
+		}
+	}
+	MPIWrapper::barrier();
+        if(my_rank == result_rank) std::cout << std::endl;
+	
+}
+
+void AlgorithmTests::compare_area_connec_map(const AreaConnectivity::AreaConnecMap& map_par,
 			     const AreaConnectivity::AreaConnecMap& map_seq) {
 	for (auto key_value = map_par.begin(); key_value != map_par.end(); key_value++) {
 		auto other_key_value = map_seq.find(key_value->first);
@@ -280,7 +366,7 @@ void compare_area_connec_map(const AreaConnectivity::AreaConnecMap& map_par,
 	}
 }
 
-void compare_edge_length_histogram(const Histogram::HistogramData& histogram_par,
+void AlgorithmTests::compare_edge_length_histogram(const Histogram::HistogramData& histogram_par,
 				   const Histogram::HistogramData& histogram_seq, const double epsilon) {
 	const auto my_rank = MPIWrapper::get_my_rank();
 	if (my_rank != 0)
