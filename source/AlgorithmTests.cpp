@@ -237,7 +237,7 @@ void AlgorithmTests::test_centrality_approx(std::filesystem::path input_director
 		std::cout << test_result << std::endl;
 }
 
-void AlgorithmTests::check_graph_characteristics(std::filesystem::path input_directory) {
+void AlgorithmTests::check_graph_property(std::filesystem::path input_directory) {
 	DistributedGraph dg(input_directory);
 	MPIWrapper::barrier();
 	const int my_rank = MPIWrapper::get_my_rank();
@@ -247,6 +247,18 @@ void AlgorithmTests::check_graph_characteristics(std::filesystem::path input_dir
 	std::vector<std::uint64_t> number_nodes_of_ranks(number_ranks);
     	MPIWrapper::gather<uint64_t>(&number_local_nodes, number_nodes_of_ranks.data(), 1, MPI_UINT64_T, result_rank);
 	MPIWrapper::barrier();
+	
+	// Check if total edge numbers equal
+	std::cout << "Check if total edge numbers equal:" << std::endl;
+	uint64_t total_number_out_edges = OutEdgeCounter::count_out_edges(dg);
+	uint64_t total_number_in_edges = InEdgeCounter::count_in_edges(dg);
+	if(my_rank == result_rank) {
+		std::cout << "\ttotal_number_out_edges = " << total_number_out_edges << std::endl;
+		std::cout << "\ttotal_number_in_edges = " << total_number_in_edges << std::endl;
+		if(total_number_out_edges != total_number_in_edges) 
+			std::cout << "\t-> Error: Total edge numbers do not equal" << std::endl;
+	}
+
 
 	// Check if there are nodes with self-referencing edges
 	if(my_rank == result_rank) std::cout << "Check if there are nodes with self-referencing edges:" << std::endl;  

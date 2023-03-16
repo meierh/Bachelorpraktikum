@@ -16,6 +16,7 @@
 #include "Histogram.h"
 #include "Modularity.h"
 #include "NetworkMotifs.h"
+#include "EdgeCounter.h"
 
 
 class AlgorithmTests {
@@ -25,7 +26,7 @@ public:
 
 	static void test_centrality_approx(std::filesystem::path input_directory);
 
-	static void check_graph_characteristics(std::filesystem::path input_directory);
+	static void check_graph_property(std::filesystem::path input_directory);
 
 	static void compare_area_connec_map(const AreaConnectivity::AreaConnecMap& map_par,
 				const AreaConnectivity::AreaConnecMap& map_seq);
