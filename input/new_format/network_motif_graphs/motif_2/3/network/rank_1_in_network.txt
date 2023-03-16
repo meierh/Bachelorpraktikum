@@ -1,0 +1,1 @@
+# <target rank> <target neuron id>	<source rank> <source neuron id>	<weight>

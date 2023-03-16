@@ -1,2 +1,0 @@
-# ID	Position (x y z)	Area	type
-1   -1 0 0  klein.hirn      ex

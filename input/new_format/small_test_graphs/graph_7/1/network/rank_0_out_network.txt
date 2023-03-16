@@ -1,0 +1,8 @@
+# Total number neurons: 4
+# Local number neurons: 4
+# Number MPI ranks: 1
+# <target_rank> <target_id <source_rank> <source_id <weight> 
+0 2 0 1 1
+0 3 0 2 1
+0 4 0 3 1
+0 1 0 4 1

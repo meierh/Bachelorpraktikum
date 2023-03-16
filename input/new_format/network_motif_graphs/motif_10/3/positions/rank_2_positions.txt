@@ -1,0 +1,2 @@
+# ID	Position (x y z)	Area	type
+1       0 1 0      kein.hirn      ex
