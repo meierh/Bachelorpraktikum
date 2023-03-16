@@ -53,10 +53,6 @@ private:
     
     typedef struct
     {
-        //std::uint64_t node_1_rank;
-        //std::uint64_t node_1_local;
-        //std::uint64_t node_2_rank;
-        //std::uint64_t node_2_local;
         std::uint64_t node_3_rank;
         std::uint64_t node_3_local;
         std::uint16_t motifTypeBitArray=0;
