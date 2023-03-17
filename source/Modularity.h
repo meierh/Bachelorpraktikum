@@ -20,6 +20,9 @@ public:
 	 *
 	 * Parameters
 	 * graph:           A DistributedGraph (Function is MPI compliant)
+	 * 
+	 * MPI Constraints: Function must be called on all ranks simultaneously
+	 * 					Function returns correct information to all ranks
 	 */
 	static double compute_modularity(DistributedGraph& graph);
 	

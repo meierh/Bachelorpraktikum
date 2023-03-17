@@ -15,8 +15,13 @@ public:
 	 * Functions to compute the length of all edges and to count them in
 	 * a length histogram
 	 *
-	 * Returns: Histogram {std::vector of pairs with the bin borders in
-	 *                     the first and the count of edges in this bin}
+	 * Returns: Histogram 	std::vector of pairs with the bin borders in
+	 *                     	the first and the count of edges in this bin
+	 *						int the second
+	 * 
+	 * MPI Constraint:		Function must be called on all ranks simultaneously
+	 * 						Function returns correct information only to 
+	 * 						the rank stated in result_rank
 	 */
 	using HistogramData = std::vector<std::pair<std::pair<double, double>, std::uint64_t>>;
 	/*
@@ -26,7 +31,7 @@ public:
 	 * Parameters
 	 * graph:           A DistributedGraph (Function is MPI compliant)
 	 * bin_width:       Width of the bin in the resulting histogram
-	 * result_rank:    MPI Rank to receive the results
+	 * result_rank:     MPI Rank to receive the results
 	 */
 	static std::unique_ptr<HistogramData> compute_edge_length_histogram_const_bin_width(DistributedGraph& graph, const double bin_width,
 											    const unsigned int result_rank = 0);
@@ -37,23 +42,28 @@ public:
 	 * Parameters
 	 * graph:           A DistributedGraph (Function is MPI compliant)
 	 * bin_count:       Number of bins in the resulting histogram
-	 * result_rank:    MPI Rank to receive the results
+	 * result_rank:     MPI Rank to receive the results
 	 */
-	static std::unique_ptr<HistogramData> compute_edge_length_histogram_const_bin_count(DistributedGraph& graph, const std::uint64_t bin_count,
-											    const unsigned int result_rank = 0);
-
-	static std::unique_ptr<HistogramData> compute_edge_length_histogram_const_bin_width_sequential(const DistributedGraph& graph, double bin_width,
-												       unsigned int result_rank = 0);
-
-	static std::unique_ptr<HistogramData> compute_edge_length_histogram_const_bin_count_sequential(const DistributedGraph& graph, std::uint64_t bin_count,
-												       unsigned int result_rank = 0);
+	static std::unique_ptr<HistogramData>
+	compute_edge_length_histogram_const_bin_count(DistributedGraph& graph, const std::uint64_t bin_count,
+						      const unsigned int result_rank = 0);
 	/*-------------------------Histogram----------------------------------|||*/
+	
+	static std::unique_ptr<HistogramData>
+	compute_edge_length_histogram_const_bin_width_sequential(const DistributedGraph& graph, double bin_width,
+								 unsigned int result_rank = 0);
+	static std::unique_ptr<HistogramData>
+	compute_edge_length_histogram_const_bin_count_sequential(const DistributedGraph& graph, std::uint64_t bin_count,
+								 unsigned int result_rank = 0);
 
 private:
-	static std::unique_ptr<HistogramData>
-	compute_edge_length_histogram(DistributedGraph& graph,
-				      const std::function<std::unique_ptr<HistogramData>(const double, const double)> histogram_creator,
-				      const unsigned int result_rank);
+	
+	/* Central method that gets called by the above methods to realize a united implementation
+	 */
+	static std::unique_ptr<HistogramData> compute_edge_length_histogram(
+	    DistributedGraph& graph,
+	    const std::function<std::unique_ptr<HistogramData>(const double, const double)> histogram_creator,
+	    const unsigned int result_rank);
 
 	/*
 	 * This sequential variant of the compute_edge_length_histogram method lets only one main process

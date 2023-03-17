@@ -333,8 +333,13 @@ void DistributedGraph::load_in_edges(const std::filesystem::path& path) {
 		unsigned int source_id{};
 
 		int weight{};
+		int plastic{};
 
 		const auto success = (iss >> target_rank) && (iss >> target_id) && (iss >> source_rank) && (iss >> source_id) && (iss >> weight);
+		auto plastic_exists = success && (iss >> plastic);
+		if(plastic_exists && plastic == 0) {
+			continue;
+		}
 
 		if (!success) {
 			std::cout << "Error processing line: " << line << '\n';
@@ -421,9 +426,15 @@ void DistributedGraph::load_out_edges(const std::filesystem::path& path) {
 		unsigned int source_id{};
 
 		int weight{};
+		int plastic{};
 
 		const auto success = (iss >> target_rank) && (iss >> target_id) && (iss >> source_rank) && (iss >> source_id) && (iss >> weight);
+		auto plastic_exists = success && (iss >> plastic);
+		if(plastic_exists && plastic == 0) {
+			continue;
+		}
 
+		
 		if (!success) {
 			std::cout << "Error processing line: " << line << '\n';
 			continue;
