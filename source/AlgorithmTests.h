@@ -17,12 +17,14 @@
 #include "Histogram.h"
 #include "Modularity.h"
 #include "NetworkMotifs.h"
+#include "Assortativity.h"
 
 class AlgorithmTests {
 public:
+
 	static void test_algorithm_parallelization(std::filesystem::path input_directory);
 
-	static void test_centrality_approx(std::filesystem::path input_directory);
+	static void test_centrality_approx(std::filesystem::path input_directory); // debug purpose
 
 	static void check_graph_property(std::filesystem::path input_directory);
 
