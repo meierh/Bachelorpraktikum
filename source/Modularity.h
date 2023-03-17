@@ -8,7 +8,6 @@
 #include <stdexcept>
 #include <unordered_map>
 
-
 class Modularity {
 public:
 	/*|||-----------------------Modularity--------------------------------
@@ -26,8 +25,10 @@ public:
 	 * 					Function returns correct information to all ranks
 	 */
 	static double compute_modularity(DistributedGraph& graph);
+	
 	static double compute_modularity_sequential(const DistributedGraph& graph);
 	/*-------------------------Modularity----------------------------------|||*/
+
 private:
 	typedef struct {
 		std::uint64_t node_in_degree;

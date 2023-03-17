@@ -1,0 +1,12 @@
+# Minimum x: 0
+# Minimum y: 0
+# Minimum z: 0
+# Maximum x: 2
+# Maximum y: 2
+# Maximum z: 0
+# <local id> <pos x> <pos y> <pos z> <area> <type>
+1 0.0 0.0 0.0 random ex
+2 0.0 2.0 0.0 random ex
+3 2.0 2.0 0.0 random ex
+4 2.0 0.0 0.0 random ex
+

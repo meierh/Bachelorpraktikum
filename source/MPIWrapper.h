@@ -3,14 +3,14 @@
 #include "mpi.h"
 
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <memory>
-#include <vector>
-#include <cstring>
 #include <stdexcept>
+#include <vector>
 
-#include <sstream>
 #include <iostream>
+#include <sstream>
 
 #include "Edge.h"
 
@@ -18,7 +18,7 @@ inline int do_nothing(void*) {
 	return 0;
 }
 
-template<typename T = void>
+template <typename T = void>
 struct RMAWindow {
 	MPI_Win window{};
 	std::uint64_t size{};
@@ -28,14 +28,17 @@ struct RMAWindow {
 	// DO NOT CHANGE IT ON LESS THAN ALL RANKS!
 	bool window_locked_globally;
 
-	RMAWindow():window_locked_globally(false) {}
+	RMAWindow() : window_locked_globally(false) {}
 
-	RMAWindow(T* ptr) : my_base_pointer(ptr),window_locked_globally(false) {
+	RMAWindow(T* ptr) : my_base_pointer(ptr), window_locked_globally(false) {}
+
+	void set_locked_globally() {
+		window_locked_globally = true;
+	}
+	void set_unlocked_globally() {
+		window_locked_globally = false;
 	}
 
-	void set_locked_globally(){window_locked_globally=true;}
-	void set_unlocked_globally(){window_locked_globally=false;}
-	
 	RMAWindow(const RMAWindow& other) = default;
 	RMAWindow(RMAWindow&& other) = default;
 
@@ -44,8 +47,8 @@ struct RMAWindow {
 };
 
 class MPIWrapper {
-	inline static int number_ranks{ -1 };
-	inline static int my_rank{ -1 };
+	inline static int number_ranks{-1};
+	inline static int my_rank{-1};
 
 	inline static std::vector<MPI_Win> windows{};
 	inline static std::vector<void*> memories{};
@@ -62,29 +65,29 @@ class MPIWrapper {
 			in_out_double[i] += in_double[i];
 		}
 	}
-	
-	static void create_mpi_datatypes(){
-		//MPI Type for Vec3d 
-		MPI_Type_contiguous(3,MPI_DOUBLE,&MPI_Vec3d);
+
+	static void create_mpi_datatypes() {
+		// MPI Type for Vec3d
+		MPI_Type_contiguous(3, MPI_DOUBLE, &MPI_Vec3d);
 		MPI_Type_commit(&MPI_Vec3d);
-		
-		//MPI Type for MPI_stdPair_of_AreaLocalID 
-		MPI_Type_contiguous(4,MPI_UINT64_T,&MPI_stdPair_of_AreaLocalID);
+
+		// MPI Type for MPI_stdPair_of_AreaLocalID
+		MPI_Type_contiguous(4, MPI_UINT64_T, &MPI_stdPair_of_AreaLocalID);
 		MPI_Type_commit(&MPI_stdPair_of_AreaLocalID);
-		
-		//MPI Type for InEdge
+
+		// MPI Type for InEdge
 		InEdge iEdge;
-		int         numberofValuesPerStructElement1[3] = {1,1,1};
-		MPI_Aint    displacementOfStructElements1[3];
-		MPI_Aint    base_address1;
+		int numberofValuesPerStructElement1[3] = {1, 1, 1};
+		MPI_Aint displacementOfStructElements1[3];
+		MPI_Aint base_address1;
 		MPI_Get_address(&iEdge, &base_address1);
 		MPI_Get_address(&iEdge.source_rank, &displacementOfStructElements1[0]);
-		MPI_Get_address(&iEdge.source_id,   &displacementOfStructElements1[1]);
-		MPI_Get_address(&iEdge.weight, 		&displacementOfStructElements1[2]);
+		MPI_Get_address(&iEdge.source_id, &displacementOfStructElements1[1]);
+		MPI_Get_address(&iEdge.weight, &displacementOfStructElements1[2]);
 		displacementOfStructElements1[0] = MPI_Aint_diff(displacementOfStructElements1[0], base_address1);
 		displacementOfStructElements1[1] = MPI_Aint_diff(displacementOfStructElements1[1], base_address1);
 		displacementOfStructElements1[2] = MPI_Aint_diff(displacementOfStructElements1[2], base_address1);
-		MPI_Datatype typesOfStructElements1[3] = {MPI_INT,MPI_UNSIGNED,MPI_INT};
+		MPI_Datatype typesOfStructElements1[3] = {MPI_INT, MPI_UNSIGNED, MPI_INT};
 		MPI_Type_create_struct
 		(
 			3,
@@ -94,20 +97,20 @@ class MPIWrapper {
 			&MPI_InEdge
 		);
 		MPI_Type_commit(&MPI_InEdge);
-		
-		//MPI Type for OutEdge
+
+		// MPI Type for OutEdge
 		OutEdge oEdge;
-		int         numberofValuesPerStructElement2[3] = {1,1,1};
-		MPI_Aint    displacementOfStructElements2[3];
-		MPI_Aint    base_address2;
+		int numberofValuesPerStructElement2[3] = {1, 1, 1};
+		MPI_Aint displacementOfStructElements2[3];
+		MPI_Aint base_address2;
 		MPI_Get_address(&oEdge, &base_address2);
 		MPI_Get_address(&oEdge.target_rank, &displacementOfStructElements2[0]);
-		MPI_Get_address(&oEdge.target_id,   &displacementOfStructElements2[1]);
-		MPI_Get_address(&oEdge.weight, 		&displacementOfStructElements2[2]);
+		MPI_Get_address(&oEdge.target_id, &displacementOfStructElements2[1]);
+		MPI_Get_address(&oEdge.weight, &displacementOfStructElements2[2]);
 		displacementOfStructElements2[0] = MPI_Aint_diff(displacementOfStructElements2[0], base_address2);
 		displacementOfStructElements2[1] = MPI_Aint_diff(displacementOfStructElements2[1], base_address2);
 		displacementOfStructElements2[2] = MPI_Aint_diff(displacementOfStructElements2[2], base_address2);
-		MPI_Datatype typesOfStructElements2[3] = {MPI_INT,MPI_UNSIGNED,MPI_INT};
+		MPI_Datatype typesOfStructElements2[3] = {MPI_INT, MPI_UNSIGNED, MPI_INT};
 		MPI_Type_create_struct
 		(
 			3,
@@ -117,29 +120,29 @@ class MPIWrapper {
 			&MPI_OutEdge
 		);
 		MPI_Type_commit(&MPI_OutEdge);
-		
-		//MPI Type for AreaConnectivityInfo
-		MPI_Type_contiguous(5,MPI_INT64_T,&MPI_AreaConnectivityInfo);
+
+		// MPI Type for AreaConnectivityInfo
+		MPI_Type_contiguous(5, MPI_INT64_T, &MPI_AreaConnectivityInfo);
 		MPI_Type_commit(&MPI_AreaConnectivityInfo);
-		
-		//MPI Type for threeMotifStructure
+
+		// MPI Type for threeMotifStructure
 		typedef struct {
 			std::uint64_t node_3_rank;
 			std::uint64_t node_3_local;
-			std::uint16_t motifTypeBitArray=0;
+			std::uint16_t motifTypeBitArray = 0;
 		} threeMotifStructure;
 		threeMotifStructure motif;
-		int         numberofValuesPerStructElement3[3] = {1,1,1};
-		MPI_Aint    displacementOfStructElements3[3];
-		MPI_Aint    base_address3;
+		int numberofValuesPerStructElement3[3] = {1, 1, 1};
+		MPI_Aint displacementOfStructElements3[3];
+		MPI_Aint base_address3;
 		MPI_Get_address(&motif, &base_address3);
 		MPI_Get_address(&motif.node_3_rank, &displacementOfStructElements3[0]);
-		MPI_Get_address(&motif.node_3_local,   &displacementOfStructElements3[1]);
-		MPI_Get_address(&motif.motifTypeBitArray, 	&displacementOfStructElements3[2]);
+		MPI_Get_address(&motif.node_3_local, &displacementOfStructElements3[1]);
+		MPI_Get_address(&motif.motifTypeBitArray, &displacementOfStructElements3[2]);
 		displacementOfStructElements3[0] = MPI_Aint_diff(displacementOfStructElements3[0], base_address3);
 		displacementOfStructElements3[1] = MPI_Aint_diff(displacementOfStructElements3[1], base_address3);
 		displacementOfStructElements3[2] = MPI_Aint_diff(displacementOfStructElements3[2], base_address3);
-		MPI_Datatype typesOfStructElements3[3] = {MPI_UINT64_T,MPI_UINT64_T,MPI_UINT16_T};
+		MPI_Datatype typesOfStructElements3[3] = {MPI_UINT64_T, MPI_UINT64_T, MPI_UINT16_T};
 		MPI_Type_create_struct
 		(
 			3,
@@ -149,13 +152,13 @@ class MPIWrapper {
 			&MPI_threeMotifStructure
 		);
 		MPI_Type_commit(&MPI_threeMotifStructure);
-		
-		//MPI Type for nodeModularityInfo 
-		MPI_Type_contiguous(3,MPI_UINT64_T,&MPI_nodeModularityInfo);
+
+		// MPI Type for nodeModularityInfo
+		MPI_Type_contiguous(3, MPI_UINT64_T, &MPI_nodeModularityInfo);
 		MPI_Type_commit(&MPI_nodeModularityInfo);
-		
-		//MPI Type for EdgeDegrees 
-		MPI_Type_contiguous(4,MPI_UINT64_T,&MPI_EdgeDegrees);
+
+		// MPI Type for EdgeDegrees
+		MPI_Type_contiguous(4, MPI_UINT64_T, &MPI_EdgeDegrees);
 		MPI_Type_commit(&MPI_EdgeDegrees);
 	}
 
@@ -168,7 +171,7 @@ public:
 	inline static MPI_Datatype MPI_threeMotifStructure;
 	inline static MPI_Datatype MPI_nodeModularityInfo;
 	inline static MPI_Datatype MPI_EdgeDegrees;
-	
+
 	static void init(int argument_count, char* arguments[]) {
 		if (const auto error_code = MPI_Init(&argument_count, &arguments); error_code != 0) {
 			std::cout << "Initializing MPI returned the error: " << error_code << std::endl;
@@ -189,7 +192,7 @@ public:
 			std::cout << "Creating the user-defined operation returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
-		
+
 		create_mpi_datatypes();
 	}
 
@@ -223,14 +226,14 @@ public:
 		return number_ranks;
 	}
 
-	static void lock_window_exclusive(const int mpi_rank, MPI_Win window) {//MPI_MODE_NOCHECK
+	static void lock_window_exclusive(const int mpi_rank, MPI_Win window) { // MPI_MODE_NOCHECK
 		if (const auto error_code = MPI_Win_lock(MPI_LOCK_EXCLUSIVE, mpi_rank, 0, window); error_code != MPI_SUCCESS) {
 			std::cout << "Exclusive-locking the RMA window returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
 	}
 
-	static void lock_window_shared(const int mpi_rank, MPI_Win window) { //MPI_MODE_NOCHECK
+	static void lock_window_shared(const int mpi_rank, MPI_Win window) { // MPI_MODE_NOCHECK
 		if (const auto error_code = MPI_Win_lock(MPI_LOCK_SHARED, mpi_rank, 0, window); error_code != MPI_SUCCESS) {
 			std::cout << "Shared-locking the RMA window returned the error: " << error_code << std::endl;
 			throw error_code;
@@ -251,7 +254,7 @@ public:
 		}
 	}
 
-	template<typename T>
+	template <typename T>
 	static RMAWindow<T> create_rma_window(std::uint64_t number_elements) {
 		const auto window_size = number_elements * sizeof(T);
 		T* ptr = nullptr;
@@ -313,7 +316,8 @@ public:
 		}
 
 		std::vector<double> buffer(number_values, 0.0);
-		if (const auto error_code = MPI_Reduce(values.data(), buffer.data(), number_values, MPI_DOUBLE, vector_sum_op, 0, MPI_COMM_WORLD); error_code != 0) {
+		if (const auto error_code = MPI_Reduce(values.data(), buffer.data(), number_values, MPI_DOUBLE, vector_sum_op, 0, MPI_COMM_WORLD);
+		    error_code != 0) {
 			std::cout << "Reducing componentwise returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -386,100 +390,104 @@ public:
 
 		return total_value;
 	}
-	
-	template<typename T>
-	static void all_reduce(T* src, T* dest,int count,MPI_Datatype datatype,MPI_Op op) {
-		const int error_code = MPI_Allreduce(src,dest,count,datatype,op,MPI_COMM_WORLD);
-		if ( error_code != 0) {
+
+	template <typename T>
+	static void all_reduce(T* src, T* dest, int count, MPI_Datatype datatype, MPI_Op op) {
+		const int error_code = MPI_Allreduce(src, dest, count, datatype, op, MPI_COMM_WORLD);
+		if (error_code != 0) {
 			std::cout << "All-reducing all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
 	}
-	
-	template<typename T>
-	static void reduce(T* src, T* dest,int count,MPI_Datatype datatype,MPI_Op op,int root) {
-		const int error_code = MPI_Reduce(src,dest,count,datatype,op,root,MPI_COMM_WORLD);
-		if ( error_code != 0) {
+
+	template <typename T>
+	static void reduce(T* src, T* dest, int count, MPI_Datatype datatype, MPI_Op op, int root) {
+		const int error_code = MPI_Reduce(src, dest, count, datatype, op, root, MPI_COMM_WORLD);
+		if (error_code != 0) {
 			std::cout << "All-reducing all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
 	}
-	
-	template<typename T>
-	static void gather(T* src, T* dest, int count, MPI_Datatype datatype,int root){
-		const int error_code= MPI_Gather(src,count,datatype,dest,count,datatype,root,MPI_COMM_WORLD);
+
+	template <typename T>
+	static void gather(T* src, T* dest, int count, MPI_Datatype datatype, int root) {
+		const int error_code = MPI_Gather(src, count, datatype, dest, count, datatype, root, MPI_COMM_WORLD);
 		if (error_code != 0) {
 			std::cout << "Gathering all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
 	}
-	
-	template<typename T>
-	static void all_gather(T* src, T* dest, int count, MPI_Datatype datatype){
-		const int error_code= MPI_Allgather(src,count,datatype,dest,count,datatype,MPI_COMM_WORLD);
+
+	template <typename T>
+	static void all_gather(T* src, T* dest, int count, MPI_Datatype datatype) {
+		const int error_code = MPI_Allgather(src, count, datatype, dest, count, datatype, MPI_COMM_WORLD);
 		if (error_code != 0) {
 			std::cout << "All_Gathering all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
 	}
-	
-	template<typename T>
-	static void gatherv(T* src, int count, T* dest, int* destCounts, int* displs, MPI_Datatype datatype,int root){
-		const int error_code= MPI_Gatherv(src,count,datatype,dest,destCounts,displs,datatype,root,MPI_COMM_WORLD);
+
+	template <typename T>
+	static void gatherv(T* src, int count, T* dest, int* destCounts, int* displs, MPI_Datatype datatype, int root) {
+		const int error_code = MPI_Gatherv(src, count, datatype, dest, destCounts, displs, datatype, root, MPI_COMM_WORLD);
 		if (error_code != 0) {
 			std::cout << "Gatherving all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
 	}
-	
-	template<typename T>
-	static void all_gatherv(T* src, int count, T* dest, int* destCounts, int* displs, MPI_Datatype datatype){
-		const int error_code= MPI_Allgatherv(src,count,datatype,dest,destCounts,displs,datatype,MPI_COMM_WORLD);
+
+	template <typename T>
+	static void all_gatherv(T* src, int count, T* dest, int* destCounts, int* displs, MPI_Datatype datatype) {
+		const int error_code = MPI_Allgatherv(src, count, datatype, dest, destCounts, displs, datatype, MPI_COMM_WORLD);
 		if (error_code != 0) {
 			std::cout << "All_Gatherving all values returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
 	}
-	
+
 	/* Access method for arbitrary rma window
-	 * 
-	 * Parameters: 
+	 *
+	 * Parameters:
 	 * 	dest_addr: Pointer to destination memory
 	 * 	count: Number of transfered elements of type T/datatype
 	 * 	src_disp: Displacement of initial transfer value
 	 * 	src_rank: Rank of data to get
 	 * 	datatype: MPI_Type corresponding to T
-	 * 
+	 *
 	 * 	Requirements:
 	 * 		[dest_addr,dest_addr+count*sizeof(T)) must be a valid memory range to write to
-	 * 		[rma_window.my_base_pointer+src_disp*sizeof(T),rma_window.my_base_pointer+src_disp*sizeof(T)+count*sizeof(T)) 
+	 * 		[rma_window.my_base_pointer+src_disp*sizeof(T),rma_window.my_base_pointer+src_disp*sizeof(T)+count*sizeof(T))
 	 * 			must be a valid memory range to read from to
 	 * 		count >= 0
 	 * 		src_disp >= 0
 	 * 		src_rank in [0,number_of_ranks)
 	 */
-	template<typename T>
-	static void passive_sync_rma_get(T *dest_addr, int count, int src_disp, int src_rank, MPI_Datatype datatype, const RMAWindow<T>& rma_window) {
-		if(!rma_window.window_locked_globally){
-			lock_window_shared(src_rank,rma_window.window);
+	template <typename T>
+	static void passive_sync_rma_get(T* dest_addr, int count, int src_disp, int src_rank, MPI_Datatype datatype, const RMAWindow<T>& rma_window) {
+		
+		if (!rma_window.window_locked_globally) {
+			lock_window_shared(src_rank, rma_window.window);
 		}
-		if(src_rank == my_rank) {	
+
+		if (src_rank == my_rank) {
 			const T* const src_base_ptr = rma_window.my_base_pointer;
-			const T* src_ptr = src_base_ptr+src_disp;
-			std::memcpy(dest_addr,src_ptr,count*sizeof(T));
-		}
-		else {
+			const T* src_ptr = src_base_ptr + src_disp;
+			std::memcpy(dest_addr, src_ptr, count * sizeof(T));
+			
+		} else {
 			MPI_Request request_item;
-			const int error_code = MPI_Rget(dest_addr, count, datatype, src_rank, src_disp*sizeof(T),
-											count, datatype, rma_window.window, &request_item);
-			if(error_code!=MPI_SUCCESS) {
-					std::cout << "Fetching a remote value returned the error code: " << error_code << std::endl;
-					throw error_code;
+			const int error_code =
+			    MPI_Rget(dest_addr, count, datatype, src_rank, src_disp * sizeof(T), count, datatype, rma_window.window, &request_item);
+			
+			if (error_code != MPI_SUCCESS) {
+				std::cout << "Fetching a remote value returned the error code: " << error_code << std::endl;
+				throw error_code;
 			}
 			MPI_Wait(&request_item, MPI_STATUS_IGNORE);
 		}
-		if(!rma_window.window_locked_globally){
-			unlock_window(src_rank,rma_window.window);
+
+		if (!rma_window.window_locked_globally) {
+			unlock_window(src_rank, rma_window.window);
 		}
 	}
 };

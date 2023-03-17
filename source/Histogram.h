@@ -8,7 +8,6 @@
 #include <stdexcept>
 #include <unordered_map>
 
-
 class Histogram {
 public:
 	/*|||-----------------------Histogram--------------------------------
@@ -34,9 +33,8 @@ public:
 	 * bin_width:       Width of the bin in the resulting histogram
 	 * result_rank:     MPI Rank to receive the results
 	 */
-	static std::unique_ptr<HistogramData>
-	compute_edge_length_histogram_const_bin_width(DistributedGraph& graph, const double bin_width,
-						      const unsigned int result_rank = 0);
+	static std::unique_ptr<HistogramData> compute_edge_length_histogram_const_bin_width(DistributedGraph& graph, const double bin_width,
+											    const unsigned int result_rank = 0);
 	/*
 	 * Version of Histogram method that creates a histogram with a given
 	 * number of bins
@@ -76,8 +74,8 @@ private:
 	 * @param result_rank main process for computation
 	 * @returns unique_ptr of the histogram created using the histogram_creater function
 	 */
-	static std::unique_ptr<HistogramData> compute_edge_length_histogram_sequential(
-	    const DistributedGraph& graph,
-	    std::function<std::unique_ptr<HistogramData>(double, double)> histogram_creator,
-	    unsigned int result_rank = 0);
+	static std::unique_ptr<HistogramData>
+	compute_edge_length_histogram_sequential(const DistributedGraph& graph, 
+						 std::function<std::unique_ptr<HistogramData>(double, double)> histogram_creator,
+						 unsigned int result_rank = 0);
 };

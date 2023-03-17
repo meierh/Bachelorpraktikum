@@ -8,7 +8,6 @@
 #include <stdexcept>
 #include <unordered_map>
 
-
 class AreaConnectivity {
 public:
 	/*|||-----------compute_area_connectivity_strength---------------------
@@ -44,6 +43,7 @@ public:
 
 private:
 	using AreaLocalID = std::pair<std::uint64_t, std::uint64_t>;
+	
 	struct StdDoublePair_hash {
 		StdPair_hash hash;
 		template <class T1, class T2>
@@ -51,7 +51,9 @@ private:
 			return hash(p.first) ^ hash(p.second);
 		}
 	};
+
 	using AreaIDConnecMap = std::unordered_map<std::pair<AreaLocalID, AreaLocalID>, int, StdDoublePair_hash>;
+	
 	typedef struct {
 		std::int64_t source_rank;
 		std::int64_t source_area_localID;
