@@ -21,12 +21,14 @@ public:
      *          the network motif types and numeration according to paper
 	 *  "A tutorial in connectome analysis: Topological and spatial features of brain networks"
 	 *  by Marcus Kaiser, 2011 in NeuroImage, (892-907), page 899
-     *          result[0] is the total count
+     *          result[0] is the total count of motifs
      *          result[i] is the fraction of motif i [1...13] (total count motif i / result[0])
 	 *
      * Parameters 
      * graph:           A DistributedGraph (Function is MPI compliant)
      * 
+	 * MPI Constraints: Function must be called on all ranks simultaneously
+	 * 					Function returns correct information to all ranks
      */
     static std::array<long double,14> compute_network_TripleMotifs
     (

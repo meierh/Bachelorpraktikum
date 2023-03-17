@@ -10,7 +10,6 @@ void AlgorithmTests::test_algorithm_parallelization(std::filesystem::path input_
 
 	// Test AreaConnectivity algorithm parallelization
 	std::unique_ptr<AreaConnectivity::AreaConnecMap> area_connect_parallel;
-	std::unique_ptr<AreaConnectivity::AreaConnecMap> area_connect_sequential_helge;
 	std::unique_ptr<AreaConnectivity::AreaConnecMap> area_connect_sequential;
 	try {
 		MPIWrapper::barrier();
@@ -20,14 +19,10 @@ void AlgorithmTests::test_algorithm_parallelization(std::filesystem::path input_
 		std::chrono::duration<double, std::milli> duration(std::chrono::high_resolution_clock::now()-time);
 		
 		
-		area_connect_sequential_helge =
-		    AreaConnectivity::area_connectivity_strength_sequential_helge(dg); // Runtime errors
 		MPIWrapper::barrier();
 		area_connect_sequential = AreaConnectivity::area_connectivity_strength_sequential(dg);
 		MPIWrapper::barrier();
 		compare_area_connec_map(*area_connect_parallel, *area_connect_sequential);
-		compare_area_connec_map(*area_connect_parallel, *area_connect_sequential_helge);
-		compare_area_connec_map(*area_connect_sequential_helge, *area_connect_sequential);
 		
 		test_result = "AreaConnectivity test completed in "+std::to_string(duration.count())+" milliseconds";
 	} catch (std::string error_code) {

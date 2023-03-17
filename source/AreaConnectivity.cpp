@@ -166,60 +166,6 @@ AreaConnectivity::compute_area_connectivity_strength(DistributedGraph& graph, co
 }
 
 std::unique_ptr<AreaConnectivity::AreaConnecMap>
-AreaConnectivity::area_connectivity_strength_sequential_helge(const DistributedGraph& graph, unsigned int result_rank) {
-	const int my_rank = MPIWrapper::get_my_rank();
-	const int number_of_ranks = MPIWrapper::get_number_ranks();
-	const std::uint64_t number_local_nodes = graph.get_number_local_nodes();
-
-	std::function<std::unique_ptr<std::vector<std::pair<std::uint64_t, int>>>(const DistributedGraph& dg)>
-	    get_number_nodes = [&](const DistributedGraph& dg) {
-		    auto number_nodes = std::make_unique<std::vector<std::pair<std::uint64_t, int>>>();
-		    number_nodes->push_back(std::pair<std::uint64_t, int>(number_local_nodes, 1));
-		    return number_nodes;
-	    };
-	std::unique_ptr<std::vector<std::vector<std::uint64_t>>> ranks_to_number_local_nodes =
-	    CommunicationPatterns::gather_Data_to_one_Rank<std::uint64_t, std::uint64_t>(
-		graph, get_number_nodes, [](std::uint64_t dat) { return std::vector<std::uint64_t>({dat}); },
-		[](std::vector<std::uint64_t>& data_vec) { return data_vec[0]; }, MPI_UINT64_T, result_rank);
-
-	std::function<std::unique_ptr<std::vector<std::pair<std::string, int>>>(const DistributedGraph&)> get_names =
-	    [](const DistributedGraph& dg) {
-		    const std::vector<std::string>& area_names = dg.get_local_area_names();
-		    auto data = std::make_unique<std::vector<std::pair<std::string, int>>>(area_names.size());
-		    std::transform(area_names.cbegin(), area_names.cend(), data->begin(),
-				   [](std::string name) { return std::pair<std::string, int>(name, name.size()); });
-		    return std::move(data);
-	    };
-	std::unique_ptr<std::vector<std::vector<std::string>>> area_names_list_of_ranks =
-	    CommunicationPatterns::gather_Data_to_one_Rank<std::string, char>(
-		graph, get_names,
-		[](std::string area_name) { return std::vector<char>(area_name.cbegin(), area_name.cend()); },
-		[](std::vector<char> area_name_vec) { return std::string(area_name_vec.data(), area_name_vec.size()); },
-		MPI_CHAR, result_rank);
-
-	auto global_connec_name_map = std::make_unique<AreaConnecMap>();
-	if (my_rank == result_rank) {
-		for (int rank = 0; rank < number_of_ranks; rank++) {
-			for (std::uint64_t node_local_ind = 0; node_local_ind < (*ranks_to_number_local_nodes)[rank][0];
-			     node_local_ind++) {
-				std::int64_t source_node_areaID = graph.get_node_area_localID(rank, node_local_ind);
-				const std::vector<OutEdge>& out_edges = graph.get_out_edges(rank, node_local_ind);
-				for (const OutEdge& out_edge : out_edges) {
-					std::int64_t target_node_areaID =
-					    graph.get_node_area_localID(out_edge.target_rank, out_edge.target_id);
-					std::string source_area = (*area_names_list_of_ranks)[rank][source_node_areaID];
-					std::string target_area =
-					    (*area_names_list_of_ranks)[out_edge.target_rank][target_node_areaID];
-					(*global_connec_name_map)[{source_area, target_area}] += out_edge.weight;
-				}
-			}
-		}
-	}
-
-	return std::move(global_connec_name_map);
-}
-
-std::unique_ptr<AreaConnectivity::AreaConnecMap>
 AreaConnectivity::area_connectivity_strength_sequential(const DistributedGraph& graph, unsigned int result_rank) {
 	// Define all relevant local variables
 	const int& my_rank = MPIWrapper::get_my_rank();
