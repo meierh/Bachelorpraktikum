@@ -11,7 +11,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-
 class NetworkMotifs {
 public:
 	/*|||-----------------------NetworkMotifs--------------------------------
@@ -29,12 +28,10 @@ public:
 	 * graph:           A DistributedGraph (Function is MPI compliant)
 	 *
 	 */
-	static std::array<long double, 14> compute_network_TripleMotifs(DistributedGraph& graph,
-									unsigned int resultToRank = 0);
+	static std::array<long double, 14> compute_network_triple_motifs(DistributedGraph& graph, unsigned int result_rank = 0);
 	/*-------------------------NetworkMotifs----------------------------------|||*/
 
-	static std::array<long double, 14> compute_network_TripleMotifs_SingleProc(DistributedGraph& graph,
-										   unsigned int my_rank = 0);
+	static std::array<long double, 14> compute_network_triple_motifs_sequential(DistributedGraph& graph, unsigned int my_rank = 0);
 
 private:
 	struct StdPair_hash {
@@ -47,19 +44,19 @@ private:
 	typedef struct {
 		std::uint64_t node_3_rank;
 		std::uint64_t node_3_local;
-		std::uint16_t motifTypeBitArray = 0;
+		std::uint16_t motif_type_bit_array = 0;
 
-		void selfTest();
-		void setMotifTypes(std::vector<int> motifTypes);
-		void unsetMotifTypes(std::vector<int> motifTypes);
-		void unsetAllButMotifTypes(std::vector<int> motifTypes);
-		bool isMotifTypeSet(int motifType);
-		void printOutComplete();
-		void printOut();
-		bool checkValidity();
-	} threeMotifStructure;
+		void self_test();
+		void set_motif_types(std::vector<int> motif_types);
+		void unset_motif_types(std::vector<int> motif_types);
+		void unset_all_but_motif_types(std::vector<int> motif_types);
+		bool is_motif_type_set(int motif_type);
+		void print_out_complete();
+		void print_out();
+		bool check_validity();
+	} ThreeMotifStructure;
 
-	static std::uint16_t update_edge_bitArray(const DistributedGraph& graph, std::uint16_t exists_edge_bitArray,
+	static std::uint16_t update_edge_bit_array(const DistributedGraph& graph, std::uint16_t exists_edge_bit_array,
 						  unsigned int node_2_rank, std::uint64_t node_2_local,
 						  unsigned int node_3_rank, std::uint64_t node_3_local);
 };

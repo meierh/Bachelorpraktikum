@@ -22,8 +22,10 @@ public:
 	 * graph:           A DistributedGraph (Function is MPI compliant)
 	 */
 	static double compute_modularity(DistributedGraph& graph);
+	
 	static double compute_modularity_sequential(const DistributedGraph& graph);
 	/*-------------------------Modularity----------------------------------|||*/
+
 private:
 	typedef struct {
 		std::uint64_t node_in_degree;

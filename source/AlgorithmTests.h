@@ -26,11 +26,10 @@ public:
 
 	static void check_graph_property(std::filesystem::path input_directory);
 
-	static void compare_area_connec_map(const AreaConnectivity::AreaConnecMap& map_par,
-					    const AreaConnectivity::AreaConnecMap& map_seq);
+	static void compare_area_connec_map(const AreaConnectivity::AreaConnecMap& map_par, const AreaConnectivity::AreaConnecMap& map_seq);
 
-	static void compare_edge_length_histogram(const Histogram::HistogramData& histogram_par,
-						  const Histogram::HistogramData& histogram_seq, const double epsilon);
+	static void compare_edge_length_histogram(const Histogram::HistogramData& histogram_par, const Histogram::HistogramData& histogram_seq,
+						  const double epsilon);
 
 	struct StdPair_hash {
 		template <class T1, class T2>

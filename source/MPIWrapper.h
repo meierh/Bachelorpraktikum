@@ -9,10 +9,8 @@
 #include <stdexcept>
 #include <vector>
 
-
 #include <iostream>
 #include <sstream>
-
 
 #include "Edge.h"
 
@@ -191,8 +189,7 @@ public:
 		}
 
 		if (const auto error_code = MPI_Op_create(vector_sum_function, 1, &vector_sum_op); error_code != 0) {
-			std::cout << "Creating the user-defined operation returned the error: " << error_code
-				  << std::endl;
+			std::cout << "Creating the user-defined operation returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
 
@@ -229,14 +226,14 @@ public:
 		return number_ranks;
 	}
 
-	static void lock_window_exclusive(const int mpi_rank, MPI_Win window) {//MPI_MODE_NOCHECK
+	static void lock_window_exclusive(const int mpi_rank, MPI_Win window) { // MPI_MODE_NOCHECK
 		if (const auto error_code = MPI_Win_lock(MPI_LOCK_EXCLUSIVE, mpi_rank, 0, window); error_code != MPI_SUCCESS) {
 			std::cout << "Exclusive-locking the RMA window returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
 	}
 
-	static void lock_window_shared(const int mpi_rank, MPI_Win window) { //MPI_MODE_NOCHECK
+	static void lock_window_shared(const int mpi_rank, MPI_Win window) { // MPI_MODE_NOCHECK
 		if (const auto error_code = MPI_Win_lock(MPI_LOCK_SHARED, mpi_rank, 0, window); error_code != MPI_SUCCESS) {
 			std::cout << "Shared-locking the RMA window returned the error: " << error_code << std::endl;
 			throw error_code;
@@ -319,7 +316,8 @@ public:
 		}
 
 		std::vector<double> buffer(number_values, 0.0);
-		if (const auto error_code = MPI_Reduce(values.data(), buffer.data(), number_values, MPI_DOUBLE, vector_sum_op, 0, MPI_COMM_WORLD); error_code != 0) {
+		if (const auto error_code = MPI_Reduce(values.data(), buffer.data(), number_values, MPI_DOUBLE, vector_sum_op, 0, MPI_COMM_WORLD);
+		    error_code != 0) {
 			std::cout << "Reducing componentwise returned the error: " << error_code << std::endl;
 			throw error_code;
 		}
@@ -465,26 +463,29 @@ public:
 	 * 		src_rank in [0,number_of_ranks)
 	 */
 	template <typename T>
-	static void passive_sync_rma_get(T* dest_addr, int count, int src_disp, int src_rank, MPI_Datatype datatype,
-					 const RMAWindow<T>& rma_window) {
+	static void passive_sync_rma_get(T* dest_addr, int count, int src_disp, int src_rank, MPI_Datatype datatype, const RMAWindow<T>& rma_window) {
+		
 		if (!rma_window.window_locked_globally) {
 			lock_window_shared(src_rank, rma_window.window);
 		}
+
 		if (src_rank == my_rank) {
 			const T* const src_base_ptr = rma_window.my_base_pointer;
 			const T* src_ptr = src_base_ptr + src_disp;
 			std::memcpy(dest_addr, src_ptr, count * sizeof(T));
+			
 		} else {
 			MPI_Request request_item;
-			const int error_code = MPI_Rget(dest_addr, count, datatype, src_rank, src_disp * sizeof(T),
-							count, datatype, rma_window.window, &request_item);
+			const int error_code =
+			    MPI_Rget(dest_addr, count, datatype, src_rank, src_disp * sizeof(T), count, datatype, rma_window.window, &request_item);
+			
 			if (error_code != MPI_SUCCESS) {
-				std::cout << "Fetching a remote value returned the error code: " << error_code
-					  << std::endl;
+				std::cout << "Fetching a remote value returned the error code: " << error_code << std::endl;
 				throw error_code;
 			}
 			MPI_Wait(&request_item, MPI_STATUS_IGNORE);
 		}
+
 		if (!rma_window.window_locked_globally) {
 			unlock_window(src_rank, rma_window.window);
 		}
