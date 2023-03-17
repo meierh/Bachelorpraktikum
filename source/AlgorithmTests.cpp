@@ -1,5 +1,5 @@
 #include "AlgorithmTests.h"
-#include "CentralityApprox.cpp" // solved linking problem (maybe needed because file name != class name (?))
+#include "CentralityApprox.cpp"
 
 void AlgorithmTests::test_algorithm_parallelization(std::filesystem::path input_directory) {
 	const int my_rank = MPIWrapper::get_my_rank();

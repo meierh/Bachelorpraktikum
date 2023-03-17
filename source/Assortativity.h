@@ -9,6 +9,24 @@
 #include "CommunicationPatterns.h"
 #include <numeric>
 
+
+/*
+ * --------------- General ---------------
+ * 
+ * This implementation requires that the provided graph
+ * - has no nodes with self-referencing edges
+ * - has no edge duplicates
+ * Otherwise, it can lead to incorrect results or error throwing.
+ *
+ *	distributed_8 (old format):
+ *	- self-referencing edges exist (e.g. distributed_8: rank_0_in_edges.txt, Line 223)
+ *
+ *	large_graphs (neues format):
+ *	- edge-duplicates exist (e.g. largeGraph: 32/network/rank_00_out_network.txt, Line 7-8)
+ *
+ *      => This properties can be analyzed with the AlgorithmTests::check_graph_property() method
+*/
+
 class Assortativity {
 public:
 	/*|||--------------compute_assortativity_coefficient------------------
@@ -150,9 +168,9 @@ private:
             Distribution2D();
             
             void set_probability(int first_index, int second_index, T probability);
-            T get_probability(int first_index, int second_index) const;
-            int get_first_dimension(){return first_dimension;} const;
-            int get_second_dimension(){return second_dimension;} const;
+            T get_probability(int first_index, int second_index);
+            int get_first_dimension(){return first_dimension;};
+            int get_second_dimension(){return second_dimension;};
             void reset(int first_dimension, int second_dimension);
             std::vector<T>& data() {return probabilities;};
             void operate_on_index(int first_index,int second_index,std::function<T(T)> operation);
@@ -187,7 +205,7 @@ private:
 	 * Returns: A tuple of the 2D distributions 
      *          std::tuple<e_in_in,e_in_out,e_out_in,e_out_out>
 	 */
-    static std::unique_ptr<std::tuple<Distribution2D<double>,Distribution2D<double>,Distribution2D<double>,Distribution2D<double>>>
+    static std::unique_ptr<std::tuple<Distribution2D<double>,Distribution2D<double>,Distribution2D<double>,Distribution2D<double>>> compute_joint_edge_degree_distribution
     (
         const DistributedGraph& graph
     );

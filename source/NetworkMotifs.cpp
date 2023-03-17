@@ -247,23 +247,30 @@ std::array<long double, 14> NetworkMotifs::compute_network_triple_motifs(Distrib
 	if (my_rank == result_rank) {
 
 		// Order invariant motifs were counted two times each
-		assert(motif_type_count_total[1] % 2 == 0);
+		//asser(motif_type_count_total[1] % 2 == 0);
+		if(motif_type_count_total[1] % 2 != 0) std::cout << "(!) Result (for motif 1) is likely incorrect due to duplicate edges" << std::endl;
 		motif_type_count_total[1] /= 2;
-		assert(motif_type_count_total[3] % 2 == 0);
+		//asser(motif_type_count_total[3] % 2 == 0);
+		if(motif_type_count_total[3] % 2 != 0) std::cout << "(!) Result (for motif 3) is likely incorrect due to duplicate edges" << std::endl;
 		motif_type_count_total[3] /= 2;
-		assert(motif_type_count_total[8] % 2 == 0);
+		//asser(motif_type_count_total[8] % 2 == 0);
+		if(motif_type_count_total[8] % 2 != 0) std::cout << "(!) Result (for motif 8) is likely incorrect due to duplicate edges" << std::endl;
 		motif_type_count_total[8] /= 2;
-		assert(motif_type_count_total[9] % 2 == 0);
+		//asser(motif_type_count_total[9] % 2 == 0);
+		if(motif_type_count_total[9] % 2 != 0) std::cout << "(!) Result (for motif 9) is likely incorrect due to duplicate edges" << std::endl;
 		motif_type_count_total[9] /= 2;
-		assert(motif_type_count_total[11] % 2 == 0);
+		//asser(motif_type_count_total[11] % 2 == 0);
+		if(motif_type_count_total[11] % 2 != 0) std::cout << "(!) Result (for motif 11) is likely incorrect due to duplicate edges" << std::endl;
 		motif_type_count_total[11] /= 2;
 
 		// Rotational invariant motifs were counted three times each
-		assert(motif_type_count_total[7] % 3 == 0);
+		//asser(motif_type_count_total[7] % 3 == 0);
+		if(motif_type_count_total[7] % 3 != 0) std::cout << "(!) Result (for motif 7) is likely incorrect due to duplicate edges" << std::endl;
 		motif_type_count_total[7] /= 3;
 
 		// Order and Rotational invariant motifs were counted six times each
-		assert(motif_type_count_total[13] % 6 == 0);
+		//asser(motif_type_count_total[13] % 6 == 0);
+		if(motif_type_count_total[13] % 6 != 0) std::cout << "(!) Result (for motif 13) is likely incorrect due to duplicate edges" << std::endl;
 		motif_type_count_total[13] /= 6;
 	}
 
@@ -279,9 +286,9 @@ std::array<long double, 14> NetworkMotifs::compute_network_triple_motifs(Distrib
 		motif_fraction[0] = total_number_of_motifs;
 
 		for (int motif_type = 1; motif_type < 14; motif_type++) {
-			motif_fraction[motif_type] = motif_type_count_total[motif_type];
-			// motif_fraction[motif_type] = static_cast<long double>(motif_type_count_total[motif_type]) /
-			// static_cast<long double>(total_number_of_motifs);
+			//motif_fraction[motif_type] = motif_type_count_total[motif_type];
+			motif_fraction[motif_type] = static_cast<long double>(motif_type_count_total[motif_type]) 
+						     / static_cast<long double>(total_number_of_motifs);
 		}
 	}
 
@@ -489,9 +496,9 @@ std::array<long double, 14> NetworkMotifs::compute_network_triple_motifs_sequent
 		motif_fraction[0] = total_number_of_motifs;
 
 		for (int motif_type = 1; motif_type < 14; motif_type++) {
-			motif_fraction[motif_type] = motif_type_count[motif_type];
-			// motif_fraction[motif_type] = static_cast<long double>(motif_type_count[motif_type]) /
-			// static_cast<long double>(total_number_of_motifs);
+			//motif_fraction[motif_type] = motif_type_count[motif_type];
+			motif_fraction[motif_type] = static_cast<long double>(motif_type_count[motif_type])
+			                             / static_cast<long double>(total_number_of_motifs);
 		}
 	}
 

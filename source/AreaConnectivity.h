@@ -8,6 +8,24 @@
 #include <stdexcept>
 #include <unordered_map>
 
+
+/*
+ * --------------- General ---------------
+ * 
+ * This implementation requires that the provided graph
+ * - has no nodes with self-referencing edges
+ * - has no edge duplicates
+ * Otherwise, it can lead to incorrect results or error throwing.
+ *
+ *	distributed_8 (old format):
+ *	- self-referencing edges exist (e.g. distributed_8: rank_0_in_edges.txt, Line 223)
+ *
+ *	large_graphs (neues format):
+ *	- edge-duplicates exist (e.g. largeGraph: 32/network/rank_00_out_network.txt, Line 7-8)
+ *
+ *      => This properties can be analyzed with the AlgorithmTests::check_graph_property() method
+*/
+
 class AreaConnectivity {
 public:
 	/*|||-----------compute_area_connectivity_strength---------------------

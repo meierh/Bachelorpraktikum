@@ -88,9 +88,9 @@ std::tuple<double,double,double,double> Assortativity::compute_assortativity_coe
     }
     
     
-    if(my_rank==0)
+    /*if(my_rank==0)
         std::cout << "par results:\nr_in_in = " << r_in_in << "\nr_in_out = " << r_in_out 
-                << "\nr_out_in = " << r_out_in << "\nr_out_out = " << r_out_out << std::endl;
+                << "\nr_out_in = " << r_out_in << "\nr_out_out = " << r_out_out << std::endl;*/
                 
 
     return result;
