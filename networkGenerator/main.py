@@ -46,32 +46,6 @@ def main():
         create_files(parent_dir, network)
         print("The files for " + str(network.num_ranks) + " ranks were created successfully!")
 
-    """
-    Testing
-    """
-    """num_nodes = 1000
-
-    # take user input for minimum and maximum x, y, z values
-    spacial_span = np.ndarray((2, 3), dtype=float)
-    spacial_span[0][0] = 0
-    spacial_span[1][0] = 56
-    spacial_span[0][1] = 0
-    spacial_span[1][1] = 56
-    spacial_span[0][2] = 0
-    spacial_span[1][2] = 56
-
-    max_ranks = 1
-    parent_dir = "C:\\Users\\nikla\\Downloads\\generated_nets"
-    # different_ranks =
-    # input("List all different numbers of ranks the network should be distributed on [1, 2, 32, ...]: ")
-
-    network = generate_network(num_nodes, spacial_span, max_ranks)
-    print("The network was created successfully!")
-
-    # function for creating all networks wanted
-    create_files(parent_dir, network)
-    print("The files were written successfully to " + parent_dir)"""
-
 
 if __name__ == '__main__':
     main()
