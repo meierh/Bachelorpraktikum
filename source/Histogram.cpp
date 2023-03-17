@@ -14,15 +14,15 @@ Histogram::compute_edge_length_histogram_const_bin_width(DistributedGraph& graph
 	std::function<std::unique_ptr<HistogramData>(const double, const double)> bin_width_histogram_creator =
 	    [=](const double min_length, const double max_length) {
 		    double span_length = max_length - min_length;
-			/*
+		    /*
 		    if (span_length <= 0) {
-			    throw std::invalid_argument("Span of edge distribution must be larger than zero!");
+			throw std::invalid_argument("Span of edge distribution must be larger than zero!");
 		    }
 		    */
 		    unsigned int number_bins = std::ceil(span_length / bin_width);
-			if(span_length==0) {
-				number_bins = 1;
-			}
+		        if (span_length == 0) {
+			        number_bins = 1;
+		        }
 		    if (number_bins < 1) {
 			    throw std::invalid_argument("Number of bins must be greater than zero");
 		    }
@@ -64,14 +64,14 @@ Histogram::compute_edge_length_histogram_const_bin_count(DistributedGraph& graph
 
 	std::function<std::unique_ptr<HistogramData>(const double, const double)> bin_count_histogram_creator =
 	    [=](const double min_length, const double max_length) {
-		    double span_length = max_length - min_length;			
+		    double span_length = max_length - min_length;
 		    if (span_length < 0) {
 			    throw std::invalid_argument("Span of edge distribution must not be smaller than zero!");
 		    }
-			// Solution to create a epsilon that is robust in 
-			// the case of multiplication and division
-			double epsilon_big = std::numeric_limits<double>::epsilon()*1000;
-			double epsilon_small = std::numeric_limits<double>::epsilon()*100;
+		        // Solution to create a epsilon that is robust in
+		        // the case of multiplication and division
+		        double epsilon_big = std::numeric_limits<double>::epsilon() * 1000;
+		        double epsilon_small = std::numeric_limits<double>::epsilon() * 100;
 
 		    double bin_width = (span_length / bin_count) + epsilon_big;
 
@@ -85,7 +85,7 @@ Histogram::compute_edge_length_histogram_const_bin_count(DistributedGraph& graph
 			    (*histogram)[i].second = 0;
 			    start_length = start_length + bin_width;
 		    }
-		
+
 		    assert(histogram->front().first.first < min_length);
 		    assert(histogram->back().first.second > max_length);
 		    return std::move(histogram);
@@ -101,15 +101,15 @@ Histogram::compute_edge_length_histogram_const_bin_width_sequential(const Distri
 	    [=](double min_length, double max_length) {
 		    double span_length = max_length - min_length;
 		    unsigned int number_bins = std::ceil(span_length / bin_width);
-			if(span_length==0) {
-				number_bins = 1;
-			}
+		        if (span_length == 0) {
+			        number_bins = 1;
+		        }
 		    if (number_bins < 1)
 			    throw std::invalid_argument("Number of bins must be greater than zero");
 		    double two_side_overlap_mult = span_length / bin_width - std::floor(span_length / bin_width);
 		    double one_side_overlap = (two_side_overlap_mult / 2) * bin_width;
 		    double start_length = min_length - one_side_overlap;
-			
+
 		    // Small decrement to avoid comparison errors
 		    start_length = std::nextafter(start_length, start_length - 1);
 		    // Small increment to avoid comparison errors
@@ -142,10 +142,10 @@ Histogram::compute_edge_length_histogram_const_bin_count_sequential(const Distri
 		    if (span_length < 0) {
 			    throw std::invalid_argument("Span of edge distribution must be larger than zero!");
 		    }
-			// Solution to create a epsilon that is robust in 
-			// the case of multiplication and division
-			double epsilon_big = std::numeric_limits<double>::epsilon()*1000;
-			double epsilon_small = std::numeric_limits<double>::epsilon()*100;
+		        // Solution to create a epsilon that is robust in
+		        // the case of multiplication and division
+		        double epsilon_big = std::numeric_limits<double>::epsilon() * 1000;
+		        double epsilon_small = std::numeric_limits<double>::epsilon() * 100;
 
 		    double bin_width = (span_length / bin_count) + epsilon_big;
 
@@ -175,10 +175,10 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
     const std::function<std::unique_ptr<HistogramData>(const double, const double)> histogram_creator,
     const unsigned int result_rank) {
 	graph.lock_all_rma_windows();
-	
-	std::chrono::time_point time = std::chrono::high_resolution_clock::now();
-	std::vector<std::chrono::duration<double, std::milli>> times;
-	std::vector<std::string> names;
+
+    std::chrono::time_point time = std::chrono::high_resolution_clock::now();
+    std::vector<std::chrono::duration<double, std::milli>> times;
+    std::vector<std::string> names;
 
 	// Test function parameters
 	const int my_rank = MPIWrapper::get_my_rank();
@@ -195,13 +195,14 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 		    const std::vector<OutEdge>& out_edges = dg.get_out_edges(my_rank, node_local_ind);
 		    Vec3d source_node_pos = dg.get_node_position(my_rank, node_local_ind);
 		    auto node_position_vec =
-			std::make_unique<std::vector<std::tuple<std::uint64_t, std::uint64_t, Vec3d>>>(out_edges.size());
+			std::make_unique<std::vector<std::tuple<std::uint64_t, std::uint64_t, Vec3d>>>(
+			    out_edges.size());
 
-			std::transform(out_edges.cbegin(), out_edges.cend(), node_position_vec->begin(),
-							[&](const OutEdge& oEdge) {
-								return std::tuple<std::uint64_t, std::uint64_t, Vec3d>
-										{oEdge.target_rank, oEdge.target_id, source_node_pos};
-							});
+		    std::transform(out_edges.cbegin(), out_edges.cend(), node_position_vec->begin(),
+				   [&](const OutEdge& oEdge) {
+					   return std::tuple<std::uint64_t, std::uint64_t, Vec3d>{
+					       oEdge.target_rank, oEdge.target_id, source_node_pos};
+				   });
 		    return std::move(node_position_vec);
 	    };
 	std::function<double(const DistributedGraph& dg, std::uint64_t node_local_ind, Vec3d para)>
@@ -212,9 +213,9 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 	std::unique_ptr<CommunicationPatterns::NodeToNodeQuestionStructure<Vec3d, double>> edge_length_results =
 	    CommunicationPatterns::node_to_node_question<Vec3d, double>(
 		graph, MPIWrapper::MPI_Vec3d, transfer_node_position, MPI_DOUBLE, compute_edge_length);
-		
-    times.push_back(std::chrono::high_resolution_clock::now()-time);
-    names.push_back("CompLocalEdgeLength");    
+
+    times.push_back(std::chrono::high_resolution_clock::now() - time);
+    names.push_back("CompLocalEdgeLength");
     time = std::chrono::high_resolution_clock::now();
 
 	// Collect edge lengths of edges to local list
@@ -224,15 +225,14 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 		    edge_length_results->getAnswersOfQuestionerNode(node_local_ind);
 		edge_lengths.insert(edge_lengths.end(), length_of_all_edges->begin(), length_of_all_edges->end());
 	}
-    times.push_back(std::chrono::high_resolution_clock::now()-time);
-    names.push_back("CollectEdgeLengths ");    
+    times.push_back(std::chrono::high_resolution_clock::now() - time);
+    names.push_back("CollectEdgeLengths ");
     time = std::chrono::high_resolution_clock::now();
 
 	// Compute the smallest and largest edge length globally
 	double min_len = std::numeric_limits<double>::max();
 	double max_len = std::numeric_limits<double>::min();
-	if(edge_lengths.size()>0)
-	{
+	if (edge_lengths.size() > 0) {
 		const auto [min_length, max_length] = std::minmax_element(edge_lengths.begin(), edge_lengths.end());
 		min_len = *min_length;
 		max_len = *max_length;
@@ -241,11 +241,11 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 	double global_max_length = 0;
 	MPIWrapper::all_reduce<double>(&min_len, &global_min_length, 1, MPI_DOUBLE, MPI_MIN);
 	MPIWrapper::all_reduce<double>(&max_len, &global_max_length, 1, MPI_DOUBLE, MPI_MAX);
-	
-    times.push_back(std::chrono::high_resolution_clock::now()-time);
-    names.push_back("ComMinMaxLengthEdge");    
+
+    times.push_back(std::chrono::high_resolution_clock::now() - time);
+    names.push_back("ComMinMaxLengthEdge");
     time = std::chrono::high_resolution_clock::now();
-	
+
 	// Create histogram with local edge data
 	std::unique_ptr<HistogramData> histogram = histogram_creator(global_min_length, global_max_length);
 	std::pair<double, double> span = histogram->front().first;
@@ -260,7 +260,7 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 		assert(length < (*histogram)[index].first.second);
 		(*histogram)[index].second++;
 	}
-    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    times.push_back(std::chrono::high_resolution_clock::now() - time);
     names.push_back("CreateLocHistogram ");
     time = std::chrono::high_resolution_clock::now();
 
@@ -275,8 +275,8 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 	}
 	MPIWrapper::reduce<std::uint64_t>(histogram_pure_count_src.data(), histogram_pure_count_dest.data(),
 					  histogram->size(), MPI_UINT64_T, MPI_SUM, result_rank);
-	
-    times.push_back(std::chrono::high_resolution_clock::now()-time);
+
+    times.push_back(std::chrono::high_resolution_clock::now() - time);
     names.push_back("CreateGlobHistogram");
     time = std::chrono::high_resolution_clock::now();
 
@@ -288,40 +288,38 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 	} else {
 		histogram = std::make_unique<std::vector<std::pair<std::pair<double, double>, std::uint64_t>>>();
 	}
-    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    times.push_back(std::chrono::high_resolution_clock::now() - time);
     names.push_back("ReconstrHistogram  ");
     time = std::chrono::high_resolution_clock::now();
 
 	graph.unlock_all_rma_windows();
-	
-    std::vector<double> time_double;
-    std::for_each(times.cbegin(),times.cend(),
-                  [&](auto time){time_double.push_back(time.count());});
-    
-    std::vector<double> global_avg_times_double(6);
-    MPIWrapper::reduce<double>(time_double.data(),global_avg_times_double.data(),6,MPI_DOUBLE,MPI_SUM,0);
-    std::for_each(global_avg_times_double.begin(),global_avg_times_double.end(),
-                  [=](double& time){time/=number_ranks;});
 
-    
+    std::vector<double> time_double;
+    std::for_each(times.cbegin(), times.cend(), [&](auto time) { time_double.push_back(time.count()); });
+
+    std::vector<double> global_avg_times_double(6);
+    MPIWrapper::reduce<double>(time_double.data(), global_avg_times_double.data(), 6, MPI_DOUBLE, MPI_SUM, 0);
+    std::for_each(global_avg_times_double.begin(), global_avg_times_double.end(),
+		  [=](double& time) { time /= number_ranks; });
+
     std::vector<double> global_max_times_double(6);
-    MPIWrapper::reduce<double>(time_double.data(),global_max_times_double.data(),6,MPI_DOUBLE,MPI_MAX,0);
-    
-    if(my_rank==0)
-    {
-        std::cout.precision(5);
-        std::cout<<"compute_edge_length_histogram"<<std::endl;
-        for(int i=0;i<names.size();i++)
-        {
-            std::cout<<names[i]<<":\tavg:"<<global_avg_times_double[i]<<"\tmax:"<<global_max_times_double[i]<<"   milliseconds"<<std::endl;
-        }
-        double total_avg = std::accumulate(global_avg_times_double.begin(),global_avg_times_double.end(),0);
-        double total_max = std::accumulate(global_max_times_double.begin(),global_max_times_double.end(),0);
-		std::cout<<"Total              "<<":\tavg:"<<total_avg<<"\tmax:"<<total_max<<"   milliseconds"<<std::endl;
-        std::cout<<"----------------------------------"<<std::endl;
-		fflush(stdout);
+    MPIWrapper::reduce<double>(time_double.data(), global_max_times_double.data(), 6, MPI_DOUBLE, MPI_MAX, 0);
+
+    if (my_rank == 0) {
+	    std::cout.precision(5);
+	    std::cout << "compute_edge_length_histogram" << std::endl;
+	    for (int i = 0; i < names.size(); i++) {
+		    std::cout << names[i] << ":\tavg:" << global_avg_times_double[i]
+			      << "\tmax:" << global_max_times_double[i] << "   milliseconds" << std::endl;
+	    }
+	    double total_avg = std::accumulate(global_avg_times_double.begin(), global_avg_times_double.end(), 0);
+	    double total_max = std::accumulate(global_max_times_double.begin(), global_max_times_double.end(), 0);
+	    std::cout << "Total              "
+		      << ":\tavg:" << total_avg << "\tmax:" << total_max << "   milliseconds" << std::endl;
+	    std::cout << "----------------------------------" << std::endl;
+	    fflush(stdout);
     }
-    
+
 	return std::move(histogram);
 }
 
@@ -343,7 +341,7 @@ std::unique_ptr<Histogram::HistogramData> Histogram::compute_edge_length_histogr
 	if (my_rank == result_rank) {
 		std::vector<double> edge_lengths;
 
-		double max_length = 0;					// assumption: min edge length is 0
+		double max_length = 0; // assumption: min edge length is 0
 		double min_length = std::numeric_limits<double>::max();
 
 		// Iterate through each rank...

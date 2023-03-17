@@ -5,10 +5,10 @@ AreaConnectivity::compute_area_connectivity_strength(DistributedGraph& graph, co
 	graph.lock_all_rma_windows();
 	MPIWrapper::barrier();
 
-	std::chrono::time_point time = std::chrono::high_resolution_clock::now();
-	std::vector<std::chrono::duration<double, std::milli>> times;
-	std::vector<std::string> names;
-	
+    std::chrono::time_point time = std::chrono::high_resolution_clock::now();
+    std::vector<std::chrono::duration<double, std::milli>> times;
+    std::vector<std::string> names;
+
 	// Test function parameters
 	const int number_of_ranks = MPIWrapper::get_number_ranks();
 	const int number_ranks = MPIWrapper::get_number_ranks();
@@ -28,13 +28,13 @@ AreaConnectivity::compute_area_connectivity_strength(DistributedGraph& graph, co
 			std::make_unique<std::vector<std::tuple<std::uint64_t, std::uint64_t, AreaConnectivityInfo>>>(
 			    out_edges.size());
 
-			std::transform(out_edges.cbegin(), out_edges.cend(), connection_sources->begin(),
-							[&](const OutEdge& oEdge) {
-								AreaConnectivityInfo one_connection = {my_rank, node_areaID, oEdge.target_rank,
-																		-1, oEdge.weight};
-								return std::tuple<std::uint64_t, std::uint64_t, AreaConnectivityInfo>
-										{oEdge.target_rank, oEdge.target_id, one_connection};
-							});
+		    std::transform(out_edges.cbegin(), out_edges.cend(), connection_sources->begin(),
+				   [&](const OutEdge& oEdge) {
+					   AreaConnectivityInfo one_connection = {my_rank, node_areaID,
+										  oEdge.target_rank, -1, oEdge.weight};
+					   return std::tuple<std::uint64_t, std::uint64_t, AreaConnectivityInfo>{
+					       oEdge.target_rank, oEdge.target_id, one_connection};
+				   });
 		    return std::move(connection_sources);
 	    };
 	std::function<AreaConnectivityInfo(const DistributedGraph&, std::uint64_t, AreaConnectivityInfo)>
@@ -58,10 +58,10 @@ AreaConnectivity::compute_area_connectivity_strength(DistributedGraph& graph, co
 			my_rank_connecID_map[{source_nameID, target_nameID}] += one_connection.weight;
 		}
 	}
-    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    times.push_back(std::chrono::high_resolution_clock::now() - time);
     names.push_back("BuildAreaConnectMap");
     time = std::chrono::high_resolution_clock::now();
-	
+
 	// Gather local area connection maps to result rank
 	using connecID_map_data = std::tuple<std::int64_t, std::int64_t, std::int64_t, std::int64_t, std::int64_t>;
 	std::function<std::unique_ptr<std::vector<std::pair<connecID_map_data, int>>>(const DistributedGraph&)>
@@ -90,7 +90,7 @@ AreaConnectivity::compute_area_connectivity_strength(DistributedGraph& graph, co
 			return std::tie(data_vec[0], data_vec[1], data_vec[2], data_vec[3], data_vec[4]);
 		},
 		MPI_INT64_T, result_rank);
-    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    times.push_back(std::chrono::high_resolution_clock::now() - time);
     names.push_back("GatherLocalAreaMaps");
     time = std::chrono::high_resolution_clock::now();
 
@@ -109,7 +109,7 @@ AreaConnectivity::compute_area_connectivity_strength(DistributedGraph& graph, co
 		[](std::string area_name) { return std::vector<char>(area_name.cbegin(), area_name.cend()); },
 		[](std::vector<char> area_name_vec) { return std::string(area_name_vec.data(), area_name_vec.size()); },
 		MPI_CHAR, result_rank);
-    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    times.push_back(std::chrono::high_resolution_clock::now() - time);
     names.push_back("GatherAreaNames    ");
     time = std::chrono::high_resolution_clock::now();
 
@@ -128,38 +128,36 @@ AreaConnectivity::compute_area_connectivity_strength(DistributedGraph& graph, co
 			(*global_connec_name_map)[{source_area, target_area}] += std::get<4>(connec_data);
 		}
 	}
-    times.push_back(std::chrono::high_resolution_clock::now()-time);
+    times.push_back(std::chrono::high_resolution_clock::now() - time);
     names.push_back("CreateAreaConnecMap");
     time = std::chrono::high_resolution_clock::now();
 
 	graph.unlock_all_rma_windows();
-    
-    std::vector<double> time_double;
-    std::for_each(times.cbegin(),times.cend(),
-                  [&](auto time){time_double.push_back(time.count());});
-    
-    std::vector<double> global_avg_times_double(6);
-    MPIWrapper::reduce<double>(time_double.data(),global_avg_times_double.data(),6,MPI_DOUBLE,MPI_SUM,0);
-    std::for_each(global_avg_times_double.begin(),global_avg_times_double.end(),
-                  [=](double& time){time/=number_ranks;});
 
-    
+    std::vector<double> time_double;
+    std::for_each(times.cbegin(), times.cend(), [&](auto time) { time_double.push_back(time.count()); });
+
+    std::vector<double> global_avg_times_double(6);
+    MPIWrapper::reduce<double>(time_double.data(), global_avg_times_double.data(), 6, MPI_DOUBLE, MPI_SUM, 0);
+    std::for_each(global_avg_times_double.begin(), global_avg_times_double.end(),
+		  [=](double& time) { time /= number_ranks; });
+
     std::vector<double> global_max_times_double(6);
-    MPIWrapper::reduce<double>(time_double.data(),global_max_times_double.data(),6,MPI_DOUBLE,MPI_MAX,0);
-    
-    if(my_rank==0)
-    {
-        std::cout.precision(5);
-        std::cout<<"compute_area_connectivity_strength"<<std::endl;
-        for(int i=0;i<names.size();i++)
-        {
-            std::cout<<names[i]<<":\tavg:"<<global_avg_times_double[i]<<"\tmax:"<<global_max_times_double[i]<<"   milliseconds"<<std::endl;
-        }
-        double total_avg = std::accumulate(global_avg_times_double.begin(),global_avg_times_double.end(),0);
-        double total_max = std::accumulate(global_max_times_double.begin(),global_max_times_double.end(),0);
-		std::cout<<"Total              "<<":\tavg:"<<total_avg<<"\tmax:"<<total_max<<"   milliseconds"<<std::endl;
-        std::cout<<"----------------------------------"<<std::endl;
-		fflush(stdout);
+    MPIWrapper::reduce<double>(time_double.data(), global_max_times_double.data(), 6, MPI_DOUBLE, MPI_MAX, 0);
+
+    if (my_rank == 0) {
+	    std::cout.precision(5);
+	    std::cout << "compute_area_connectivity_strength" << std::endl;
+	    for (int i = 0; i < names.size(); i++) {
+		    std::cout << names[i] << ":\tavg:" << global_avg_times_double[i]
+			      << "\tmax:" << global_max_times_double[i] << "   milliseconds" << std::endl;
+	    }
+	    double total_avg = std::accumulate(global_avg_times_double.begin(), global_avg_times_double.end(), 0);
+	    double total_max = std::accumulate(global_max_times_double.begin(), global_max_times_double.end(), 0);
+	    std::cout << "Total              "
+		      << ":\tavg:" << total_avg << "\tmax:" << total_max << "   milliseconds" << std::endl;
+	    std::cout << "----------------------------------" << std::endl;
+	    fflush(stdout);
     }
 
 	return std::move(global_connec_name_map);

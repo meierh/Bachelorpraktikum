@@ -8,7 +8,6 @@
 #include <stdexcept>
 #include <unordered_map>
 
-
 class Histogram {
 public:
 	/*|||-----------------------Histogram--------------------------------

@@ -8,7 +8,6 @@
 #include <stdexcept>
 #include <unordered_map>
 
-
 class AreaConnectivity {
 public:
 	/*|||------------------areaConnectivityStrength--------------------------

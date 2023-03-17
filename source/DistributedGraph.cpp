@@ -6,9 +6,10 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <sstream>
 #include <string>
-#include <sstream>	
 #include <vector>
+
 
 DistributedGraph::DistributedGraph(const std::filesystem::path& path) {
 	const auto my_rank = MPIWrapper::get_my_rank();
@@ -16,10 +17,10 @@ DistributedGraph::DistributedGraph(const std::filesystem::path& path) {
 	int number_of_digits_ranks = std::to_string(MPIWrapper::get_number_ranks() - 1).length();
 	int number_of_digits_my_rank = std::to_string(my_rank).length();
 
-  	// zeros = number_of_ranks - rank (check for possible negativ number ?)
-  	int number_of_zeros = number_of_digits_ranks - number_of_digits_my_rank;
-  	std::string zeros (number_of_zeros, '0');
-	
+	// zeros = number_of_ranks - rank (check for possible negativ number ?)
+	int number_of_zeros = number_of_digits_ranks - number_of_digits_my_rank;
+	std::string zeros(number_of_zeros, '0');
+
 	// build the rank prefix for the files
 	const std::string rank_prefix = std::string("rank_") + zeros + std::to_string(my_rank);
 
@@ -51,7 +52,7 @@ DistributedGraph::DistributedGraph(const std::filesystem::path& path) {
 		std::cout << "The out edges for rank " << my_rank << " do not exist:\n" << out_network << std::endl;
 		throw 3;
 	}
-	
+
 	load_nodes(positions);
 	load_in_edges(in_network);
 	load_out_edges(out_network);
@@ -59,121 +60,131 @@ DistributedGraph::DistributedGraph(const std::filesystem::path& path) {
 	out_edge_cache.init();
 }
 
-void DistributedGraph::lock_all_rma_windows(){
+void DistributedGraph::lock_all_rma_windows() {
 	const auto error_1 = MPI_Win_lock_all(0, nodes_window.window);
-	if(error_1 != MPI_SUCCESS) {
+	if (error_1 != MPI_SUCCESS) {
 		std::cout << "Locking all nodes_window RMA windows returned the error: " << error_1 << std::endl;
 		throw error_1;
 	}
-	nodes_window.window_locked_globally=true;
+	nodes_window.window_locked_globally = true;
 	const auto error_2 = MPI_Win_lock_all(0, in_edges_window.window);
-	if(error_2 != MPI_SUCCESS) {
+	if (error_2 != MPI_SUCCESS) {
 		std::cout << "Locking all in_edges_window RMA windows returned the error: " << error_2 << std::endl;
 		throw error_2;
 	}
-	in_edges_window.window_locked_globally=true;
+	in_edges_window.window_locked_globally = true;
 	const auto error_3 = MPI_Win_lock_all(0, prefix_in_edges_window.window);
-	if(error_3 != MPI_SUCCESS) {
-		std::cout << "Locking all prefix_in_edges_window RMA windows returned the error: " << error_3 << std::endl;
+	if (error_3 != MPI_SUCCESS) {
+		std::cout << "Locking all prefix_in_edges_window RMA windows returned the error: " << error_3
+			  << std::endl;
 		throw error_3;
 	}
-	prefix_in_edges_window.window_locked_globally=true;
+	prefix_in_edges_window.window_locked_globally = true;
 	const auto error_4 = MPI_Win_lock_all(0, number_in_edges_window.window);
-	if(error_4 != MPI_SUCCESS) {
-		std::cout << "Locking all number_in_edges_window RMA windows returned the error: " << error_4 << std::endl;
+	if (error_4 != MPI_SUCCESS) {
+		std::cout << "Locking all number_in_edges_window RMA windows returned the error: " << error_4
+			  << std::endl;
 		throw error_4;
 	}
-	number_in_edges_window.window_locked_globally=true;
+	number_in_edges_window.window_locked_globally = true;
 	const auto error_5 = MPI_Win_lock_all(0, out_edges_window.window);
-	if(error_5 != MPI_SUCCESS) {
+	if (error_5 != MPI_SUCCESS) {
 		std::cout << "Locking all out_edges_window RMA windows returned the error: " << error_5 << std::endl;
 		throw error_5;
 	}
-	out_edges_window.window_locked_globally=true;
+	out_edges_window.window_locked_globally = true;
 	const auto error_6 = MPI_Win_lock_all(0, prefix_out_edges_window.window);
-	if(error_6 != MPI_SUCCESS) {
-		std::cout << "Locking all prefix_out_edges_window RMA windows returned the error: " << error_6 << std::endl;
+	if (error_6 != MPI_SUCCESS) {
+		std::cout << "Locking all prefix_out_edges_window RMA windows returned the error: " << error_6
+			  << std::endl;
 		throw error_6;
 	}
-	prefix_out_edges_window.window_locked_globally=true;
+	prefix_out_edges_window.window_locked_globally = true;
 	const auto error_7 = MPI_Win_lock_all(0, number_out_edges_window.window);
-	if(error_7 != MPI_SUCCESS) {
+	if (error_7 != MPI_SUCCESS) {
 		std::cout << "Locking all nodes_window RMA windows returned the error: " << error_7 << std::endl;
 		throw error_7;
 	}
-	number_out_edges_window.window_locked_globally=true;
+	number_out_edges_window.window_locked_globally = true;
 	const auto error_8 = MPI_Win_lock_all(0, area_names_ind_window.window);
-	if(error_8 != MPI_SUCCESS) {
-		std::cout << "Locking all area_names_ind_window RMA windows returned the error: " << error_8 << std::endl;
+	if (error_8 != MPI_SUCCESS) {
+		std::cout << "Locking all area_names_ind_window RMA windows returned the error: " << error_8
+			  << std::endl;
 		throw error_8;
 	}
-	area_names_ind_window.window_locked_globally=true;
+	area_names_ind_window.window_locked_globally = true;
 	const auto error_9 = MPI_Win_lock_all(0, signal_types_ind_window.window);
-	if(error_9 != MPI_SUCCESS) {
-		std::cout << "Locking all signal_types_ind_window RMA windows returned the error: " << error_9 << std::endl;
+	if (error_9 != MPI_SUCCESS) {
+		std::cout << "Locking all signal_types_ind_window RMA windows returned the error: " << error_9
+			  << std::endl;
 		throw error_9;
 	}
-	signal_types_ind_window.window_locked_globally=true;
-	
+	signal_types_ind_window.window_locked_globally = true;
+
 	MPIWrapper::barrier();
 }
 
-void DistributedGraph::unlock_all_rma_windows(){
+void DistributedGraph::unlock_all_rma_windows() {
 	const auto error_1 = MPI_Win_unlock_all(nodes_window.window);
-	if(error_1 != MPI_SUCCESS) {
+	if (error_1 != MPI_SUCCESS) {
 		std::cout << "Unlocking all nodes_window RMA windows returned the error: " << error_1 << std::endl;
 		throw error_1;
 	}
-	nodes_window.window_locked_globally=false;
+	nodes_window.window_locked_globally = false;
 	const auto error_2 = MPI_Win_unlock_all(in_edges_window.window);
-	if(error_2 != MPI_SUCCESS) {
+	if (error_2 != MPI_SUCCESS) {
 		std::cout << "Unlocking all in_edges_window RMA windows returned the error: " << error_2 << std::endl;
 		throw error_2;
 	}
-	in_edges_window.window_locked_globally=false;
+	in_edges_window.window_locked_globally = false;
 	const auto error_3 = MPI_Win_unlock_all(prefix_in_edges_window.window);
-	if(error_3 != MPI_SUCCESS) {
-		std::cout << "Unlocking all prefix_in_edges_window RMA windows returned the error: " << error_3 << std::endl;
+	if (error_3 != MPI_SUCCESS) {
+		std::cout << "Unlocking all prefix_in_edges_window RMA windows returned the error: " << error_3
+			  << std::endl;
 		throw error_3;
 	}
-	prefix_in_edges_window.window_locked_globally=false;
+	prefix_in_edges_window.window_locked_globally = false;
 	const auto error_4 = MPI_Win_unlock_all(number_in_edges_window.window);
-	if(error_4 != MPI_SUCCESS) {
-		std::cout << "Unlocking all number_in_edges_window RMA windows returned the error: " << error_4 << std::endl;
+	if (error_4 != MPI_SUCCESS) {
+		std::cout << "Unlocking all number_in_edges_window RMA windows returned the error: " << error_4
+			  << std::endl;
 		throw error_4;
 	}
-	number_in_edges_window.window_locked_globally=false;
+	number_in_edges_window.window_locked_globally = false;
 	const auto error_5 = MPI_Win_unlock_all(out_edges_window.window);
-	if(error_5 != MPI_SUCCESS) {
+	if (error_5 != MPI_SUCCESS) {
 		std::cout << "Unlocking all out_edges_window RMA windows returned the error: " << error_5 << std::endl;
 		throw error_5;
 	}
-	out_edges_window.window_locked_globally=false;
+	out_edges_window.window_locked_globally = false;
 	const auto error_6 = MPI_Win_unlock_all(prefix_out_edges_window.window);
-	if(error_6 != MPI_SUCCESS) {
+	if (error_6 != MPI_SUCCESS) {
 		std::cout << "Unlocking all nodes_window RMA windows returned the error: " << error_6 << std::endl;
 		throw error_6;
 	}
-	prefix_out_edges_window.window_locked_globally=false;
+	prefix_out_edges_window.window_locked_globally = false;
 	const auto error_7 = MPI_Win_unlock_all(number_out_edges_window.window);
-	if(error_7 != MPI_SUCCESS) {
-		std::cout << "Unlocking all number_out_edges_window RMA windows returned the error: " << error_7 << std::endl;
+	if (error_7 != MPI_SUCCESS) {
+		std::cout << "Unlocking all number_out_edges_window RMA windows returned the error: " << error_7
+			  << std::endl;
 		throw error_7;
 	}
-	number_out_edges_window.window_locked_globally=false;
+	number_out_edges_window.window_locked_globally = false;
 	const auto error_8 = MPI_Win_unlock_all(area_names_ind_window.window);
-	if(error_8 != MPI_SUCCESS) {
-		std::cout << "Unlocking all area_names_ind_window RMA windows returned the error: " << error_8 << std::endl;
+	if (error_8 != MPI_SUCCESS) {
+		std::cout << "Unlocking all area_names_ind_window RMA windows returned the error: " << error_8
+			  << std::endl;
 		throw error_8;
 	}
-	area_names_ind_window.window_locked_globally=false;
+	area_names_ind_window.window_locked_globally = false;
 	const auto error_9 = MPI_Win_unlock_all(signal_types_ind_window.window);
-	if(error_9 != MPI_SUCCESS) {
-		std::cout << "Unlocking all signal_types_ind_window RMA windows returned the error: " << error_9 << std::endl;
+	if (error_9 != MPI_SUCCESS) {
+		std::cout << "Unlocking all signal_types_ind_window RMA windows returned the error: " << error_9
+			  << std::endl;
 		throw error_9;
 	}
-	signal_types_ind_window.window_locked_globally=false;
-	
+	signal_types_ind_window.window_locked_globally = false;
+
 	MPIWrapper::barrier();
 }
 
@@ -188,27 +199,28 @@ void DistributedGraph::load_nodes(const std::filesystem::path& path) {
 	std::vector<Vec3d> positions{};
 	std::vector<std::uint64_t> area_names_ind{};
 	std::vector<std::uint64_t> signal_types_ind{};
-	
-	std::unordered_map<std::string,int> area_names_set;
-	std::unordered_map<std::string,int> signal_types_set;
+
+	std::unordered_map<std::string, int> area_names_set;
+	std::unordered_map<std::string, int> signal_types_set;
 
 	while (std::getline(file, line)) {
 		if (line.empty() || '#' == line[0]) {
 			continue;
 		}
 
-		std::istringstream iss{ line };
+		std::istringstream iss{line};
 
-		std::uint64_t id{ 0 };
+		std::uint64_t id{0};
 
-		double pos_x{ 0.0 };
-		double pos_y{ 0.0 };
-		double pos_z{ 0.0 };
+		double pos_x{0.0};
+		double pos_y{0.0};
+		double pos_z{0.0};
 
 		std::string area_name{};
 		std::string signal_type{};
 
-		const auto success = (iss >> id) && (iss >> pos_x) && (iss >> pos_y) && (iss >> pos_z) && (iss >> area_name) && (iss >> signal_type);
+		const auto success = (iss >> id) && (iss >> pos_x) && (iss >> pos_y) && (iss >> pos_z) &&
+				     (iss >> area_name) && (iss >> signal_type);
 
 		if (!success) {
 			std::cout << "Error processing line: " << line << '\n';
@@ -228,52 +240,48 @@ void DistributedGraph::load_nodes(const std::filesystem::path& path) {
 		}
 
 		positions.emplace_back(pos_x, pos_y, pos_z);
-		
+
 		const auto area_name_pos = area_names_set.find(area_name);
-		if(area_name_pos != area_names_set.end())
-		//Area name already encountered
+		if (area_name_pos != area_names_set.end())
+		// Area name already encountered
 		{
 			area_names_ind.emplace_back(area_name_pos->second);
-		}
-		else
-		//Area name new
+		} else
+		// Area name new
 		{
-			area_names_set.insert(std::pair<std::string,int>(area_name,area_names.size()));
+			area_names_set.insert(std::pair<std::string, int>(area_name, area_names.size()));
 			area_names_ind.emplace_back(area_names.size());
 			area_names.push_back(area_name);
 		}
-		
+
 		const auto signal_type_pos = signal_types_set.find(area_name);
-		if(signal_type_pos != signal_types_set.end())
-		//Signal name already encountered
+		if (signal_type_pos != signal_types_set.end())
+		// Signal name already encountered
 		{
 			signal_types_ind.emplace_back(signal_type_pos->second);
-		}
-		else
-		//signal type new
+		} else
+		// signal type new
 		{
-			signal_types_set.insert(std::pair<std::string,int>(signal_type,signal_types.size()));
+			signal_types_set.insert(std::pair<std::string, int>(signal_type, signal_types.size()));
 			signal_types_ind.emplace_back(signal_types.size());
 			signal_types.push_back(signal_type);
 		}
 	}
 
-	for(int i=0;i<area_names_ind.size();i++)
-	{
-		if(area_names_ind[i]<0 || area_names_ind[i]>=area_names.size())
+	for (int i = 0; i < area_names_ind.size(); i++) {
+		if (area_names_ind[i] < 0 || area_names_ind[i] >= area_names.size())
 			throw 89;
 	}
-	for(int i=0;i<signal_types_ind.size();i++)
-	{
-		if(signal_types_ind[i]<0 || signal_types_ind[i]>=signal_types.size())
+	for (int i = 0; i < signal_types_ind.size(); i++) {
+		if (signal_types_ind[i] < 0 || signal_types_ind[i] >= signal_types.size())
 			throw 79;
 	}
-	
+
 	MPIWrapper::barrier();
-	
+
 	nodes_window = MPIWrapper::create_rma_window<Vec3d>(positions.size());
 	local_number_nodes = positions.size();
-	
+
 	area_names_ind_window = MPIWrapper::create_rma_window<std::uint64_t>(area_names_ind.size());
 	signal_types_ind_window = MPIWrapper::create_rma_window<std::uint64_t>(signal_types_ind.size());
 
@@ -282,13 +290,15 @@ void DistributedGraph::load_nodes(const std::filesystem::path& path) {
 	MPIWrapper::lock_window_exclusive(my_rank, nodes_window.window);
 	std::memcpy(nodes_window.my_base_pointer, positions.data(), sizeof(Vec3d) * positions.size());
 	MPIWrapper::unlock_window(my_rank, nodes_window.window);
-	
+
 	MPIWrapper::lock_window_exclusive(my_rank, area_names_ind_window.window);
-	std::memcpy(area_names_ind_window.my_base_pointer, area_names_ind.data(), sizeof(std::uint64_t) * area_names_ind.size());
+	std::memcpy(area_names_ind_window.my_base_pointer, area_names_ind.data(),
+		    sizeof(std::uint64_t) * area_names_ind.size());
 	MPIWrapper::unlock_window(my_rank, area_names_ind_window.window);
-	
+
 	MPIWrapper::lock_window_exclusive(my_rank, signal_types_ind_window.window);
-	std::memcpy(signal_types_ind_window.my_base_pointer, signal_types_ind.data(), sizeof(std::uint64_t) * signal_types_ind.size());
+	std::memcpy(signal_types_ind_window.my_base_pointer, signal_types_ind.data(),
+		    sizeof(std::uint64_t) * signal_types_ind.size());
 	MPIWrapper::unlock_window(my_rank, signal_types_ind_window.window);
 }
 
@@ -310,17 +320,18 @@ void DistributedGraph::load_in_edges(const std::filesystem::path& path) {
 			continue;
 		}
 
-		std::istringstream iss{ line };
+		std::istringstream iss{line};
 
 		int target_rank{};
 		unsigned int target_id{};
 
 		int source_rank{};
-		unsigned int  source_id{};
+		unsigned int source_id{};
 
 		int weight{};
 
-		const auto success = (iss >> target_rank) && (iss >> target_id) && (iss >> source_rank) && (iss >> source_id) && (iss >> weight);
+		const auto success = (iss >> target_rank) && (iss >> target_id) && (iss >> source_rank) &&
+				     (iss >> source_id) && (iss >> weight);
 
 		if (!success) {
 			std::cout << "Error processing line: " << line << '\n';
@@ -328,7 +339,8 @@ void DistributedGraph::load_in_edges(const std::filesystem::path& path) {
 		}
 
 		if (target_rank != my_rank) {
-			std::cout << "Loading in-edges for rank " << my_rank << " but found an in-edge that is directed to rank " << target_rank << '\n';
+			std::cout << "Loading in-edges for rank " << my_rank
+				  << " but found an in-edge that is directed to rank " << target_rank << '\n';
 			continue;
 		}
 
@@ -337,7 +349,8 @@ void DistributedGraph::load_in_edges(const std::filesystem::path& path) {
 		source_id--;
 
 		if (target_id >= local_number_nodes) {
-			std::cout << "Loaded an in-edge with target id " << target_id << " but I only have " << local_number_nodes << " nodes.\n";
+			std::cout << "Loaded an in-edge with target id " << target_id << " but I only have "
+				  << local_number_nodes << " nodes.\n";
 			continue;
 		}
 
@@ -357,12 +370,14 @@ void DistributedGraph::load_in_edges(const std::filesystem::path& path) {
 	for (auto target_id = 0; target_id < local_number_nodes; target_id++) {
 		const auto& in_edges = all_in_edges[target_id];
 
-		std::memcpy(in_edges_window.my_base_pointer + current_filling, in_edges.data(), in_edges.size() * sizeof(InEdge));
+		std::memcpy(in_edges_window.my_base_pointer + current_filling, in_edges.data(),
+			    in_edges.size() * sizeof(InEdge));
 		current_filling += in_edges.size();
 		number_in_edges[target_id] = in_edges.size();
 
 		if (target_id > 0) {
-			prefix_number_in_edges[target_id] = prefix_number_in_edges[target_id - 1] + all_in_edges[target_id - 1].size();
+			prefix_number_in_edges[target_id] =
+			    prefix_number_in_edges[target_id - 1] + all_in_edges[target_id - 1].size();
 		}
 	}
 	MPIWrapper::unlock_window(my_rank, in_edges_window.window);
@@ -370,13 +385,15 @@ void DistributedGraph::load_in_edges(const std::filesystem::path& path) {
 	number_in_edges_window = MPIWrapper::create_rma_window<std::uint64_t>(local_number_nodes);
 
 	MPIWrapper::lock_window_exclusive(my_rank, number_in_edges_window.window);
-	std::memcpy(number_in_edges_window.my_base_pointer, number_in_edges.data(), sizeof(std::uint64_t) * local_number_nodes);
+	std::memcpy(number_in_edges_window.my_base_pointer, number_in_edges.data(),
+		    sizeof(std::uint64_t) * local_number_nodes);
 	MPIWrapper::unlock_window(my_rank, number_in_edges_window.window);
 
 	prefix_in_edges_window = MPIWrapper::create_rma_window<std::uint64_t>(local_number_nodes);
 
 	MPIWrapper::lock_window_exclusive(my_rank, prefix_in_edges_window.window);
-	std::memcpy(prefix_in_edges_window.my_base_pointer, prefix_number_in_edges.data(), sizeof(std::uint64_t) * local_number_nodes);
+	std::memcpy(prefix_in_edges_window.my_base_pointer, prefix_number_in_edges.data(),
+		    sizeof(std::uint64_t) * local_number_nodes);
 	MPIWrapper::unlock_window(my_rank, prefix_in_edges_window.window);
 }
 
@@ -398,17 +415,18 @@ void DistributedGraph::load_out_edges(const std::filesystem::path& path) {
 			continue;
 		}
 
-		std::istringstream iss{ line };
+		std::istringstream iss{line};
 
 		int target_rank{};
 		unsigned int target_id{};
 
 		int source_rank{};
-		unsigned int  source_id{};
+		unsigned int source_id{};
 
 		int weight{};
 
-		const auto success = (iss >> target_rank) && (iss >> target_id) && (iss >> source_rank) && (iss >> source_id) && (iss >> weight);
+		const auto success = (iss >> target_rank) && (iss >> target_id) && (iss >> source_rank) &&
+				     (iss >> source_id) && (iss >> weight);
 
 		if (!success) {
 			std::cout << "Error processing line: " << line << '\n';
@@ -416,7 +434,8 @@ void DistributedGraph::load_out_edges(const std::filesystem::path& path) {
 		}
 
 		if (source_rank != my_rank) {
-			std::cout << "Loading out-edges for rank " << my_rank << " but found an out-edge that is directed to rank " << source_rank << '\n';
+			std::cout << "Loading out-edges for rank " << my_rank
+				  << " but found an out-edge that is directed to rank " << source_rank << '\n';
 			continue;
 		}
 
@@ -425,7 +444,8 @@ void DistributedGraph::load_out_edges(const std::filesystem::path& path) {
 		source_id--;
 
 		if (source_id >= local_number_nodes) {
-			std::cout << "Loaded an out-edge with source id " << source_id << " but I only have " << local_number_nodes << " nodes.\n";
+			std::cout << "Loaded an out-edge with source id " << source_id << " but I only have "
+				  << local_number_nodes << " nodes.\n";
 			continue;
 		}
 
@@ -445,13 +465,17 @@ void DistributedGraph::load_out_edges(const std::filesystem::path& path) {
 	for (auto source_id = 0; source_id < local_number_nodes; source_id++) {
 		const auto& out_edges = all_out_edges[source_id];
 
-		std::memcpy(out_edges_window.my_base_pointer + current_filling, out_edges.data(), out_edges.size() * sizeof(OutEdge));
+		std::memcpy(out_edges_window.my_base_pointer + current_filling, out_edges.data(),
+			    out_edges.size() * sizeof(OutEdge));
 		current_filling += out_edges.size();
 
 		number_out_edges[source_id] = out_edges.size();
 
 		if (source_id > 0) {
-			prefix_number_out_edges[source_id] = prefix_number_out_edges[source_id - 1] + all_out_edges[source_id - 1].size(); //Removed double ++ before all_out_edges[source_id - 1].size()
+			prefix_number_out_edges[source_id] =
+			    prefix_number_out_edges[source_id - 1] +
+			    all_out_edges[source_id - 1]
+				.size(); // Removed double ++ before all_out_edges[source_id - 1].size()
 		}
 	}
 	MPIWrapper::unlock_window(my_rank, out_edges_window.window);
@@ -459,12 +483,14 @@ void DistributedGraph::load_out_edges(const std::filesystem::path& path) {
 	number_out_edges_window = MPIWrapper::create_rma_window<std::uint64_t>(local_number_nodes);
 
 	MPIWrapper::lock_window_exclusive(my_rank, number_out_edges_window.window);
-	std::memcpy(number_out_edges_window.my_base_pointer, number_out_edges.data(), sizeof(std::uint64_t) * local_number_nodes);
+	std::memcpy(number_out_edges_window.my_base_pointer, number_out_edges.data(),
+		    sizeof(std::uint64_t) * local_number_nodes);
 	MPIWrapper::unlock_window(my_rank, number_out_edges_window.window);
 
 	prefix_out_edges_window = MPIWrapper::create_rma_window<std::uint64_t>(local_number_nodes);
 
 	MPIWrapper::lock_window_exclusive(my_rank, prefix_out_edges_window.window);
-	std::memcpy(prefix_out_edges_window.my_base_pointer, prefix_number_out_edges.data(), sizeof(std::uint64_t) * local_number_nodes);
+	std::memcpy(prefix_out_edges_window.my_base_pointer, prefix_number_out_edges.data(),
+		    sizeof(std::uint64_t) * local_number_nodes);
 	MPIWrapper::unlock_window(my_rank, prefix_out_edges_window.window);
 }
